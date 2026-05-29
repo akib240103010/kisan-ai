@@ -41,7 +41,7 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 app.post('/api/chat', upload.single('image'), async (req, res) => {
   try {
-    const { message, lang, history, sessionId } = req.body;
+    const { message, lang, history, sessionId, isAudio, weatherTemp, weatherHumidity, weatherWind, weatherRain, weatherDesc } = req.body;
     
     // Parse the history array passed via FormData
     let parsedHistory = [];
@@ -191,6 +191,16 @@ app.post('/api/chat', upload.single('image'), async (req, res) => {
           "dosage_per_acre": "Standard mixture ratio for a 1-acre field, or 'N/A'."
         }
       `;
+    }
+
+    // Append weather context if available
+    if (weatherTemp && weatherHumidity) {
+      prompt += `\nReal-time Weather Context: The current weather at the farmer's location is: Temperature: ${weatherTemp}, Humidity: ${weatherHumidity}, Wind speed: ${weatherWind || 'N/A'}, Rain probability/Cloudiness: ${weatherRain || 'N/A'}, Condition: ${weatherDesc || 'N/A'}. Use this real-time weather context (especially humidity, temperature, approaching rain) to provide highly tailored and practical farming advice (e.g., warning about disease risks in high humidity, advising against spraying if rain is approaching, suggesting watering schedules).`;
+    }
+
+    // Append special voice instructions if request is triggered by Voice Assistant
+    if (isAudio === 'true' || isAudio === true) {
+      prompt += `\nCRITICAL VOICE INSTRUCTION: Keep the 'immediate_action' field extremely short, conversational, clear, and easy to pronounce (no list formatting, markdown, or complex symbols) since it will be spoken aloud.`;
     }
 
     // Construct multi-modal parts array
@@ -429,6 +439,68 @@ app.get('/api/chats/:sessionId/messages', async (req, res) => {
   } catch (error) {
     console.error("Fetch Messages Error:", error);
     res.status(500).json({ error: "Failed to fetch messages" });
+  }
+});
+
+// Fetch latest announcements/schemes
+app.get('/api/announcements', (req, res) => {
+  res.json({
+    title: "PM-Kisan 17th Installment Released / PM-किसान 17वीं किस्त जारी",
+    description: "The Government of India has released the 17th installment under the PM-Kisan Samman Nidhi scheme. Eligible farmers will receive ₹2,000 directly in their Aadhaar-seeded bank accounts. Please check your payment status on the official portal and verify that land seeding is complete.",
+    lastUpdated: "2026-05-28"
+  });
+});
+
+// Fetch weather-based AI advice
+app.post('/api/weather-advice', async (req, res) => {
+  const { weather, lang } = req.body;
+  try {
+    
+    // Construct prompt for Gemini
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const prompt = `
+      You are Kisan AI, a highly knowledgeable farming assistant for farmers in India.
+      Based on the following current weather conditions:
+      - Temperature: ${weather?.temp || 'N/A'}
+      - Humidity: ${weather?.humidity || 'N/A'}
+      - Wind speed: ${weather?.wind || 'N/A'}
+      - Rain probability/Cloudiness: ${weather?.rain || 'N/A'}
+      - Condition: ${weather?.description || 'N/A'}
+
+      Generate 3 to 5 short, practical agricultural advices/warnings for a farmer today. E.g. warning about disease risks in high humidity, advising on spraying window based on wind speed, irrigation based on rain probability, harvesting checks.
+      
+      Respond in ${lang === 'hi' ? 'Hindi' : 'English'}.
+      Format the output as a JSON array of objects, where each object has:
+      {
+        "type": "ok" or "warn",
+        "text": "The advice text (keep it under 15 words)"
+      }
+      Do not include markdown or backticks. Return ONLY the raw JSON array.
+    `;
+
+    const result = await model.generateContent(prompt);
+    let responseText = result.response.text();
+    let cleanedText = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+    const advice = JSON.parse(cleanedText);
+    res.json({ success: true, advice });
+  } catch (error) {
+    console.error("Weather advice API error:", error);
+    // Return standard fallback advice if it fails
+    const hi = lang === 'hi';
+    res.json({
+      success: false,
+      advice: hi
+        ? [
+            { type: "ok", text: "मौसम के अनुसार सिंचाई की योजना बनाएं।" },
+            { type: "warn", text: "उच्च आर्द्रता में कीटों की निगरानी करें।" },
+            { type: "ok", text: "शांत हवा में कीटनाशक छिड़काव करें।" }
+          ]
+        : [
+            { type: "ok", text: "Plan irrigation based on weather forecasts." },
+            { type: "warn", text: "Monitor crops for pests during high humidity." },
+            { type: "ok", text: "Spray pesticides during calm wind conditions." }
+          ]
+    });
   }
 });
 
