@@ -3,6 +3,33 @@ import { getWeatherAdvice } from "../api/claude";
 
 // Map WMO weather code to descriptions and icons
 const getWeatherIconAndDesc = (code, isHi = false) => {
+  // Check if OpenWeatherMap Code (200 - 804)
+  if (code >= 200 && code <= 804) {
+    if (code >= 200 && code <= 299) {
+      return { icon: "⛈️", desc: isHi ? "आंधी तूफान और वर्षा" : "Thunderstorm" };
+    }
+    if (code >= 300 && code <= 399) {
+      return { icon: "🌦️", desc: isHi ? "हल्की बूंदाबांदी" : "Drizzle" };
+    }
+    if (code >= 500 && code <= 599) {
+      return { icon: "🌧️", desc: isHi ? "वर्षा" : "Rain" };
+    }
+    if (code >= 600 && code <= 699) {
+      return { icon: "🌨️", desc: isHi ? "बर्फबारी" : "Snow" };
+    }
+    if (code >= 700 && code <= 799) {
+      return { icon: "🌫️", desc: isHi ? "कोहरा / धुंध" : "Fog / Mist" };
+    }
+    if (code === 800) {
+      return { icon: "☀️", desc: isHi ? "साफ आसमान" : "Clear sky" };
+    }
+    if (code === 801) {
+      return { icon: "🌤️", desc: isHi ? "मुख्यतः साफ" : "Mainly clear" };
+    }
+    return { icon: "☁️", desc: isHi ? "घने बादल" : "Cloudy" };
+  }
+
+  // WMO Code mapping
   const map = {
     0: { icon: "☀️", descEn: "Clear sky", descHi: "साफ आसमान" },
     1: { icon: "🌤️", descEn: "Mainly clear", descHi: "मुख्यतः साफ" },

@@ -27,6 +27,89 @@ function getWMOInfo(code) {
   return wmoMap[code] || { icon: "🌦️", desc: "Variable weather" };
 }
 
+const parseOWMOneCallData = (data, fetchedBase) => {
+  if (data.daily && Array.isArray(data.daily)) {
+    const forecastList = data.daily.map((day) => {
+      const dateStr = new Date(day.dt * 1000).toISOString().split('T')[0];
+      return {
+        date: dateStr,
+        tempMax: `${Math.round(day.temp.max)}°C`,
+        tempMin: `${Math.round(day.temp.min)}°C`,
+        uvIndex: day.uvi || 0,
+        weatherCode: day.weather?.[0]?.id || 800, // Store OWM Weather ID
+        windSpeed: `${Math.round(day.wind_speed * 3.6)} km/h`,
+        windDir: day.wind_deg || 0,
+        precipitation: `${day.rain || day.snow || 0} mm`
+      };
+    });
+    
+    fetchedBase.forecast = forecastList;
+    fetchedBase.uvIndex = data.daily[0]?.uvi || 0;
+    fetchedBase.windDir = data.daily[0]?.wind_deg || fetchedBase.windDir || 0;
+    fetchedBase.precipitation = `${data.daily[0]?.rain || data.daily[0]?.snow || 0} mm`;
+  }
+  return fetchedBase;
+};
+
+const fetchOWMOneCall = async (lat, lon, fetchedBase) => {
+  if (!OWM_API_KEY) throw new Error("No OpenWeatherMap API key");
+  
+  // Query OWM One Call 3.0
+  const url = `https://api.openweathermap.org/data/3.0/onecall?lat=${lat}&lon=${lon}&exclude=minutely,hourly,alerts&appid=${OWM_API_KEY}&units=metric`;
+  const res = await fetch(url);
+  if (!res.ok) {
+    // Fallback to OWM One Call 2.5
+    const url25 = `https://api.openweathermap.org/data/2.5/onecall?lat=${lat}&lon=${lon}&exclude=minutely,hourly,alerts&appid=${OWM_API_KEY}&units=metric`;
+    const res25 = await fetch(url25);
+    if (!res25.ok) {
+      throw new Error(`OWM One Call failed with status ${res25.status}`);
+    }
+    return parseOWMOneCallData(await res25.json(), fetchedBase);
+  }
+  return parseOWMOneCallData(await res.json(), fetchedBase);
+};
+
+const fetchForecast = async (lat, lon, fetchedBase) => {
+  try {
+    console.log("Attempting OpenWeatherMap One Call forecast fetch...");
+    return await fetchOWMOneCall(lat, lon, fetchedBase);
+  } catch (owmErr) {
+    console.warn("OpenWeatherMap One Call failed, falling back to Open-Meteo:", owmErr.message);
+    try {
+      const openMeteoUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max,temperature_2m_min,uv_index_max,weathercode,windspeed_10m_max,winddirection_10m_dominant,precipitation_sum&timezone=auto&wind_speed_unit=kmh`;
+      const meteoRes = await fetch(openMeteoUrl);
+      if (meteoRes.ok) {
+        const meteoData = await meteoRes.json();
+        if (meteoData.daily) {
+          const daily = meteoData.daily;
+          const forecastList = daily.time.map((time, idx) => ({
+            date: time,
+            tempMax: `${Math.round(daily.temperature_2m_max[idx])}°C`,
+            tempMin: `${Math.round(daily.temperature_2m_min[idx])}°C`,
+            uvIndex: daily.uv_index_max[idx],
+            weatherCode: daily.weathercode[idx], // WMO Weather Code
+            windSpeed: `${Math.round(daily.windspeed_10m_max[idx])} km/h`,
+            windDir: daily.winddirection_10m_dominant[idx],
+            precipitation: `${daily.precipitation_sum[idx]} mm`
+          }));
+          
+          fetchedBase.forecast = forecastList;
+          fetchedBase.uvIndex = daily.uv_index_max[0] || 0;
+          fetchedBase.windDir = daily.winddirection_10m_dominant[0] || fetchedBase.windDir || 0;
+          fetchedBase.precipitation = `${daily.precipitation_sum[0] || 0} mm`;
+        }
+      }
+    } catch (err) {
+      console.warn("Failed to fetch forecast from Open-Meteo:", err);
+      fetchedBase.forecast = [];
+      fetchedBase.uvIndex = fetchedBase.uvIndex || 0;
+      fetchedBase.windDir = fetchedBase.windDir || 0;
+      fetchedBase.precipitation = fetchedBase.precipitation || "0 mm";
+    }
+    return fetchedBase;
+  }
+};
+
 export default function useWeather() {
   // Smart Default: Load initial weather from localStorage if available
   const [weather, setWeather] = useState(() => {
@@ -48,42 +131,6 @@ export default function useWeather() {
   useEffect(() => {
     weatherRef.current = weather;
   }, [weather]);
-
-  const fetchForecast = async (lat, lon, fetchedBase) => {
-    try {
-      const openMeteoUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max,temperature_2m_min,uv_index_max,weathercode,windspeed_10m_max,winddirection_10m_dominant,precipitation_sum&timezone=auto&wind_speed_unit=kmh`;
-      const meteoRes = await fetch(openMeteoUrl);
-      if (meteoRes.ok) {
-        const meteoData = await meteoRes.json();
-        if (meteoData.daily) {
-          const daily = meteoData.daily;
-          const forecastList = daily.time.map((time, idx) => ({
-            date: time,
-            tempMax: `${Math.round(daily.temperature_2m_max[idx])}°C`,
-            tempMin: `${Math.round(daily.temperature_2m_min[idx])}°C`,
-            uvIndex: daily.uv_index_max[idx],
-            weatherCode: daily.weathercode[idx],
-            windSpeed: `${Math.round(daily.windspeed_10m_max[idx])} km/h`,
-            windDir: daily.winddirection_10m_dominant[idx],
-            precipitation: `${daily.precipitation_sum[idx]} mm`
-          }));
-          
-          fetchedBase.forecast = forecastList;
-          fetchedBase.uvIndex = daily.uv_index_max[0] || 0;
-          fetchedBase.windDir = daily.winddirection_10m_dominant[0] || fetchedBase.windDir || 0;
-          fetchedBase.precipitation = `${daily.precipitation_sum[0] || 0} mm`;
-        }
-      }
-    } catch (err) {
-      console.warn("Failed to fetch forecast from Open-Meteo:", err);
-      // Fallback empty forecast if it fails
-      fetchedBase.forecast = [];
-      fetchedBase.uvIndex = fetchedBase.uvIndex || 0;
-      fetchedBase.windDir = fetchedBase.windDir || 0;
-      fetchedBase.precipitation = fetchedBase.precipitation || "0 mm";
-    }
-    return fetchedBase;
-  };
 
   const fetchWeatherByCoords = useCallback(async (lat, lon) => {
     setLoading(true);
