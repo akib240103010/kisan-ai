@@ -2,6 +2,7 @@ import ReactMarkdown from "react-markdown";
 import { useState, useRef, useEffect } from "react";
 import DosageCalculator from "../components/DosageCalculator";
 import imageCompression from "browser-image-compression";
+import VoiceAssistant from "../components/VoiceAssistant";
 
 const quickPrompts = {
   en: ["Best fertilizer for wheat?", "How to control aphids?", "When to harvest rice?", "PM-Kisan scheme details"],
@@ -10,7 +11,7 @@ const quickPrompts = {
 
 const BASE = import.meta.env.VITE_API_URL || "http://localhost:3001";
 
-export default function Chat({ lang, showRainWarning, sidebarOpen, setSidebarOpen }) {
+export default function Chat({ lang, showRainWarning, sidebarOpen, setSidebarOpen, weather }) {
   const [messages, setMessages] = useState([
     {
       role: "bot",
@@ -180,6 +181,13 @@ export default function Chat({ lang, showRainWarning, sidebarOpen, setSidebarOpe
       if (fileToSend) {
         formData.append("image", fileToSend);
       }
+      if (weather) {
+        formData.append("weatherTemp", weather.temp || "");
+        formData.append("weatherHumidity", weather.humidity || "");
+        formData.append("weatherWind", weather.wind || "");
+        formData.append("weatherRain", weather.rain || "");
+        formData.append("weatherDesc", weather.description || "");
+      }
 
       // 1. Call local Node/Gemini backend with FormData body
       const response = await fetch(`${BASE}/api/chat`, {
@@ -251,6 +259,13 @@ export default function Chat({ lang, showRainWarning, sidebarOpen, setSidebarOpe
       {/* Main Chat Interface */}
       <div className="chat-main card">
         <div className="card-title">🤖 {hi ? "किसान AI से पूछें" : "Ask Kisan AI"}</div>
+
+        <VoiceAssistant 
+          sessionId={sessionId} 
+          setMessages={setMessages} 
+          setSessions={setSessions} 
+          weather={weather}
+        />
 
         {showRainWarning && (
           <div

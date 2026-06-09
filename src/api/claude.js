@@ -18,11 +18,11 @@ export async function chatWithAI({ message, lang }) {
   return res.json();
 }
 
-export async function getWeatherAdvice({ city, lang }) {
+export async function getWeatherAdvice({ weather, lang }) {
   const res = await fetch(`${BASE}/api/weather-advice`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ city, lang }),
+    body: JSON.stringify({ weather, lang }),
   });
   return res.json();
 }

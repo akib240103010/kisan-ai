@@ -3,6 +3,8 @@ import Diagnose from "./pages/Diagnose";
 import Weather from "./pages/Weather";
 import Calendar from "./pages/Calendar";
 import Chat from "./pages/Chat";
+import SchemeAnnouncement from "./components/SchemeAnnouncement";
+import useWeather from "./hooks/useWeather";
 import "./App.css";
 
 const tabs = [
@@ -17,6 +19,16 @@ function App() {
   const [lang, setLang] = useState("en");
   const [showRainWarning, setShowRainWarning] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  const {
+    weather,
+    loading: weatherLoading,
+    error: weatherError,
+    permissionDenied: weatherPermissionDenied,
+    isSlow: weatherIsSlow,
+    fetchWeatherByCity,
+    getLocalWeather,
+  } = useWeather();
   
   // Theme state
   const [theme, setTheme] = useState(() => {
@@ -34,10 +46,10 @@ function App() {
   };
 
   useEffect(() => {
-    async function checkWeather() {
+    async function checkWeather(lat = 26.86631, lon = 84.87879) {
       try {
         const res = await fetch(
-          "https://api.open-meteo.com/v1/forecast?latitude=26.86631&longitude=84.87879&hourly=rain,precipitation_probability&timezone=Asia/Kolkata&forecast_days=2"
+          `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=rain,precipitation_probability&timezone=Asia/Kolkata&forecast_days=2`
         );
         if (!res.ok) throw new Error("Weather fetch failed");
         const data = await res.json();
@@ -54,7 +66,19 @@ function App() {
         console.error("Error checking weather warning:", err);
       }
     }
-    checkWeather();
+
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          checkWeather(position.coords.latitude, position.coords.longitude);
+        },
+        () => {
+          checkWeather(); // Fallback to Patna coordinates
+        }
+      );
+    } else {
+      checkWeather();
+    }
   }, []);
 
   return (
@@ -117,7 +141,18 @@ function App() {
 
       <div className="content">
         {activeTab === "diagnose" && <Diagnose lang={lang} />}
-        {activeTab === "weather"  && <Weather  lang={lang} />}
+        {activeTab === "weather"  && (
+          <Weather
+            lang={lang}
+            weather={weather}
+            loading={weatherLoading}
+            error={weatherError}
+            permissionDenied={weatherPermissionDenied}
+            isSlow={weatherIsSlow}
+            fetchWeatherByCity={fetchWeatherByCity}
+            getLocalWeather={getLocalWeather}
+          />
+        )}
         {activeTab === "calendar" && <Calendar lang={lang} />}
         {activeTab === "chat"     && (
           <Chat 
@@ -125,10 +160,12 @@ function App() {
             showRainWarning={showRainWarning} 
             sidebarOpen={sidebarOpen}
             setSidebarOpen={setSidebarOpen}
+            weather={weather}
           />
         )}
       </div>
 
+      <SchemeAnnouncement />
     </div>
   );
 }
