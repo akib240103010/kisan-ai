@@ -1,8 +1,9 @@
+import "regenerator-runtime/runtime";
 import ReactMarkdown from "react-markdown";
 import { useState, useRef, useEffect } from "react";
 import DosageCalculator from "../components/DosageCalculator";
 import imageCompression from "browser-image-compression";
-import VoiceAssistant from "../components/VoiceAssistant";
+import SpeechRecognition, { useSpeechRecognition } from "react-speech-recognition";
 
 const quickPrompts = {
   en: ["Best fertilizer for wheat?", "How to control aphids?", "When to harvest rice?", "PM-Kisan scheme details"],
@@ -45,6 +46,52 @@ export default function Chat({ lang, showRainWarning, sidebarOpen, setSidebarOpe
   const bottomRef = useRef(null);
   const hi = lang === "hi";
   const [ttsLang, setTtsLang] = useState("hi-IN");
+
+  // Speech recognition hooks
+  const lastSpeechRef = useRef("");
+  const {
+    transcript,
+    listening,
+    resetTranscript,
+    browserSupportsSpeechRecognition
+  } = useSpeechRecognition();
+
+  const [voiceStatus, setVoiceStatus] = useState("idle"); // idle | listening | processing
+
+  const toggleListening = () => {
+    if (listening) {
+      SpeechRecognition.stopListening();
+      setVoiceStatus("idle");
+    } else {
+      resetTranscript();
+      lastSpeechRef.current = "";
+      setVoiceStatus("listening");
+      if (window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
+      SpeechRecognition.startListening({
+        language: ttsLang,
+        continuous: false
+      });
+    }
+  };
+
+  // Monitor listening transition to submit query
+  useEffect(() => {
+    if (!listening && transcript.trim() !== "") {
+      const capturedText = transcript.trim();
+      if (capturedText !== lastSpeechRef.current) {
+        lastSpeechRef.current = capturedText;
+        setVoiceStatus("processing");
+        send(capturedText, true).then(() => {
+          setVoiceStatus("idle");
+        }).catch(() => {
+          setVoiceStatus("idle");
+        });
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listening, transcript]);
 
   // Sync TTS language with active application UI language state
   useEffect(() => {
@@ -215,14 +262,14 @@ export default function Chat({ lang, showRainWarning, sidebarOpen, setSidebarOpe
     }
   }
 
-  async function send(text) {
+  async function send(text, isAudio = false) {
     let msg = text || input.trim();
     if (!msg && !attachedFile) return;
     if (!msg && attachedFile) {
       msg = lang === "hi" ? "कृपया इस पौधे की जांच करें।" : "Please analyze this plant.";
     }
 
-    const displayMsg = attachedFile ? `[📷 Photo] ${msg}`.trim() : msg;
+    const displayMsg = isAudio ? `🎙️ ${msg}` : (attachedFile ? `[📷 Photo] ${msg}`.trim() : msg);
 
     setInput("");
     const fileToSend = attachedFile;
@@ -241,6 +288,9 @@ export default function Chat({ lang, showRainWarning, sidebarOpen, setSidebarOpe
       formData.append("message", msg);
       formData.append("lang", lang);
       formData.append("history", JSON.stringify(messages));
+      if (isAudio) {
+        formData.append("isAudio", "true");
+      }
       if (sessionId) {
         formData.append("sessionId", sessionId);
       }
@@ -353,12 +403,6 @@ export default function Chat({ lang, showRainWarning, sidebarOpen, setSidebarOpe
           </button>
         </div>
 
-        <VoiceAssistant 
-          sessionId={sessionId} 
-          setMessages={setMessages} 
-          setSessions={setSessions} 
-          weather={weather}
-        />
 
         {showRainWarning && (
           <div className="chat-rain-warning">
@@ -447,6 +491,7 @@ export default function Chat({ lang, showRainWarning, sidebarOpen, setSidebarOpe
             onClick={() => fileInputRef.current?.click()}
             className="icon-btn attach-btn"
             type="button"
+            disabled={voiceStatus === "processing" || listening}
             aria-label={hi ? "छवि संलग्न करें" : "Attach Image"}
           >
             📷
@@ -455,12 +500,37 @@ export default function Chat({ lang, showRainWarning, sidebarOpen, setSidebarOpe
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && send()}
-            placeholder={hi ? "सवाल टाइप करें..." : "Type your question..."}
+            placeholder={
+              listening 
+                ? (hi ? "सुन रहा हूँ... बोलें..." : "Listening... Speak...") 
+                : voiceStatus === "processing" 
+                  ? (hi ? "आवाज संसाधित हो रही है..." : "Processing voice...") 
+                  : (hi ? "सवाल टाइप करें..." : "Type your question...")
+            }
             className="chat-input"
+            disabled={voiceStatus === "processing" || listening}
           />
+          {browserSupportsSpeechRecognition && (
+            <button
+              type="button"
+              onClick={toggleListening}
+              className={`icon-btn mic-btn ${listening ? "listening" : ""} ${voiceStatus === "processing" ? "processing" : ""}`}
+              disabled={voiceStatus === "processing"}
+              aria-label={listening ? "Stop listening" : "Start speaking"}
+            >
+              {listening ? (
+                <span style={{ fontSize: "14px", fontWeight: "bold" }}>■</span>
+              ) : voiceStatus === "processing" ? (
+                <span className="animate-spin" style={{ fontSize: "14px" }}>⏳</span>
+              ) : (
+                <span style={{ fontSize: "16px" }}>🎤</span>
+              )}
+            </button>
+          )}
           <button
             onClick={() => send()}
             className="icon-btn send-btn"
+            disabled={voiceStatus === "processing" || listening}
             aria-label={hi ? "भेजें" : "Send"}
           >
             ➤

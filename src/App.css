@@ -1619,3 +1619,31 @@ body {
     display: inline-block;
   }
 }
+
+/* Inline Mic Button Styles */
+.icon-btn.mic-btn {
+  background: var(--bg-input);
+  border-color: var(--border-light);
+  color: var(--primary-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.icon-btn.mic-btn:hover {
+  background: var(--bg-sidebar-active);
+  border-color: var(--border-sidebar-active);
+  color: var(--text-sidebar-active);
+}
+.icon-btn.mic-btn.listening {
+  background: #ef4444 !important;
+  border-color: #ef4444 !important;
+  color: #ffffff !important;
+  animation: pulse 1.5s infinite ease-in-out;
+}
+.icon-btn.mic-btn.processing {
+  background: #f59e0b !important;
+  border-color: #f59e0b !important;
+  color: #ffffff !important;
+}
+
