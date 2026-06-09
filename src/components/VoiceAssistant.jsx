@@ -8,9 +8,10 @@ const BASE = import.meta.env.VITE_API_URL || "http://localhost:3001";
  * Text-to-Speech playback helper.
  * Designed to be easily swappable with a cloud service (e.g., Google Cloud TTS) for Bhojpuri in production.
  */
-const playTTS = (text, langCode) => {
+const playTTS = (text, langCode, onEnd) => {
   if (!("speechSynthesis" in window)) {
     console.warn("Speech Synthesis is not supported in this browser.");
+    if (onEnd) onEnd();
     return;
   }
 
@@ -40,6 +41,11 @@ const playTTS = (text, langCode) => {
 
   if (matchedVoice) {
     utterance.voice = matchedVoice;
+  }
+
+  if (onEnd) {
+    utterance.onend = onEnd;
+    utterance.onerror = onEnd;
   }
 
   // Speak
@@ -114,7 +120,7 @@ export default function VoiceAssistant({ sessionId, setMessages, setSessions, we
 
         // 3. Play audio feedback (using immediate action text for a clean, short spoken summary)
         setStatus("speaking");
-        playTTS(textReply, config.ttsLang);
+        playTTS(textReply, config.ttsLang, () => setStatus("idle"));
       } else {
         throw new Error("API call unsuccessful");
       }
@@ -122,8 +128,8 @@ export default function VoiceAssistant({ sessionId, setMessages, setSessions, we
       console.error("VoiceAssistant Query Error:", err);
       const errText = selectedLang.startsWith("hi") ? "माफ करें, मैं सर्वर से कनेक्ट नहीं हो सका।" : "Sorry, I could not connect to the server.";
       setMessages(prev => [...prev, { role: "bot", text: errText }]);
-      playTTS(errText, selectedLang);
-      setStatus("idle");
+      setStatus("speaking");
+      playTTS(errText, selectedLang, () => setStatus("idle"));
     }
   }, [sessionId, selectedLang, setMessages, setSessions, weather]);
 
@@ -138,11 +144,16 @@ export default function VoiceAssistant({ sessionId, setMessages, setSessions, we
     }
   }, [listening, transcript, sendSpeechQuery]);
 
-  // Handle TTS browser voices load delay
+  // Handle TTS browser voices load delay and unmount cleanup
   useEffect(() => {
     if (typeof window !== "undefined" && window.speechSynthesis) {
       window.speechSynthesis.getVoices();
     }
+    return () => {
+      if (typeof window !== "undefined" && window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
+    };
   }, []);
 
   const toggleListening = () => {

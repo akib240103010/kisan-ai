@@ -44,6 +44,15 @@ export default function Chat({ lang, showRainWarning, sidebarOpen, setSidebarOpe
   const fileInputRef = useRef(null);
   const bottomRef = useRef(null);
   const hi = lang === "hi";
+  const [ttsLang, setTtsLang] = useState("hi-IN");
+
+  // Sync TTS language with active application UI language state
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setTtsLang(lang === "hi" ? "hi-IN" : "en-US");
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [lang]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -73,15 +82,20 @@ export default function Chat({ lang, showRainWarning, sidebarOpen, setSidebarOpe
 
     const utterance = new SpeechSynthesisUtterance(cleanedText);
     
-    // Choose appropriate language code based on current language state
-    const langCode = lang === "hi" ? "hi-IN" : "en-US";
-    utterance.lang = langCode;
+    // Choose voice language based on ttsLang dropdown selection
+    const targetPrefix = ttsLang.split("-")[0].toLowerCase(); // 'en', 'hi', 'bho'
+    const voiceLang = targetPrefix === "bho" ? "hi-IN" : ttsLang;
+    utterance.lang = voiceLang;
 
-    // Search for browser voice matching active language code
+    // Search for browser voice matching active language prefix dynamically
     const voices = window.speechSynthesis.getVoices();
-    const matchedVoice = voices.find(
-      (v) => v.lang.toLowerCase().replace("_", "-") === langCode.toLowerCase()
-    ) || voices.find((v) => v.lang.startsWith(langCode.substring(0, 2)));
+    const matchedVoice = voices.find((v) => {
+      const vLang = v.lang.toLowerCase().replace("_", "-");
+      if (vLang === voiceLang.toLowerCase()) return true;
+      const vPrefix = vLang.split("-")[0];
+      if (targetPrefix === "bho" && vPrefix === "hi") return true;
+      return vPrefix === targetPrefix;
+    });
 
     if (matchedVoice) {
       utterance.voice = matchedVoice;
@@ -347,12 +361,27 @@ export default function Chat({ lang, showRainWarning, sidebarOpen, setSidebarOpe
           </div>
         )}
 
-        <div style={{ display: "flex", gap: 7, flexWrap: "wrap", marginBottom: 12 }}>
-          {quickPrompts[lang].map((q) => (
-            <button key={q} onClick={() => send(q)} className="quick-prompt-btn">
-              {q}
-            </button>
-          ))}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
+          <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
+            {quickPrompts[lang].map((q) => (
+              <button key={q} onClick={() => send(q)} className="quick-prompt-btn">
+                {q}
+              </button>
+            ))}
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginLeft: "auto" }}>
+            <span style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: "500" }}>🔊 {hi ? "पढ़ने की भाषा:" : "Readout Lang:"}</span>
+            <select
+              value={ttsLang}
+              onChange={(e) => setTtsLang(e.target.value)}
+              className="kisan-input text-xs"
+              style={{ width: "110px", padding: "4px 8px", minHeight: "auto" }}
+            >
+              <option value="en-US">English</option>
+              <option value="hi-IN">Hindi / हिंदी</option>
+              <option value="bho-IN">Bhojpuri / भोजपुरी</option>
+            </select>
+          </div>
         </div>
 
         <div
