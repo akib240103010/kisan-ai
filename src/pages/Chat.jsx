@@ -22,7 +22,7 @@ function cleanMarkdownForSpeech(text) {
     .trim();
 }
 
-export default function Chat({ lang, showRainWarning, sidebarOpen, setSidebarOpen, weather }) {
+export default function Chat({ lang, showRainWarning, sidebarOpen, setSidebarOpen, weather, setActiveTab }) {
   const [messages, setMessages] = useState([
     {
       role: "bot",
@@ -311,7 +311,7 @@ export default function Chat({ lang, showRainWarning, sidebarOpen, setSidebarOpe
         >
           ➕ {hi ? "नई बातचीत" : "New Chat"}
         </button>
-        <div style={{ display: "flex", flexDirection: "column", gap: "8px", maxHeight: "350px", overflowY: "auto" }}>
+        <div className="chat-sidebar-list">
           {sessions.map((s) => (
             <button
               key={s.id}
@@ -329,7 +329,29 @@ export default function Chat({ lang, showRainWarning, sidebarOpen, setSidebarOpe
 
       {/* Main Chat Interface */}
       <div className="chat-main card">
-        <div className="card-title">🤖 {hi ? "किसान AI से पूछें" : "Ask Kisan AI"}</div>
+        <div className="chat-header-bar">
+          <button 
+            className="chat-back-btn" 
+            onClick={() => setActiveTab("diagnose")} 
+            aria-label={hi ? "वापस" : "Back"}
+          >
+            ←
+          </button>
+          <div className="chat-header-info">
+            <span className="chat-header-avatar">🌾</span>
+            <div>
+              <h3 className="chat-header-title">{hi ? "किसान AI" : "Kisan AI"}</h3>
+              <p className="chat-header-subtitle">{hi ? "सक्रिय कृषि सहायक" : "Active Farming Assistant"}</p>
+            </div>
+          </div>
+          <button 
+            className="chat-menu-btn" 
+            onClick={() => setSidebarOpen(prev => !prev)} 
+            aria-label={hi ? "इतिहास" : "History"}
+          >
+            ☰
+          </button>
+        </div>
 
         <VoiceAssistant 
           sessionId={sessionId} 
@@ -339,21 +361,9 @@ export default function Chat({ lang, showRainWarning, sidebarOpen, setSidebarOpe
         />
 
         {showRainWarning && (
-          <div
-            style={{
-              background: "var(--bg-warning)",
-              border: "1px solid var(--border-warning)",
-              borderRadius: "12px",
-              padding: "12px 16px",
-              marginBottom: "16px",
-              display: "flex",
-              alignItems: "center",
-              gap: "10px",
-              color: "var(--text-warning)",
-            }}
-          >
-            <span style={{ fontSize: "18px" }}>⚠️</span>
-            <span style={{ fontSize: "13px", fontWeight: "500", lineHeight: "1.4" }}>
+          <div className="chat-rain-warning">
+            <span className="warning-icon">⚠️</span>
+            <span className="warning-text">
               {lang === "hi"
                 ? "संभावित बारिश के कारण आज रसायनों के छिड़काव से बचें।"
                 : "Avoid spraying chemicals today due to expected rain."}
@@ -361,21 +371,20 @@ export default function Chat({ lang, showRainWarning, sidebarOpen, setSidebarOpe
           </div>
         )}
 
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
-          <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
+        <div className="chat-settings-bar">
+          <div className="quick-prompts-list">
             {quickPrompts[lang].map((q) => (
               <button key={q} onClick={() => send(q)} className="quick-prompt-btn">
                 {q}
               </button>
             ))}
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, marginLeft: "auto" }}>
-            <span style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: "500" }}>🔊 {hi ? "पढ़ने की भाषा:" : "Readout Lang:"}</span>
+          <div className="readout-selector-container">
+            <span className="readout-label">🔊 {hi ? "पढ़ने की भाषा:" : "Readout Lang:"}</span>
             <select
               value={ttsLang}
               onChange={(e) => setTtsLang(e.target.value)}
-              className="kisan-input text-xs"
-              style={{ width: "110px", padding: "4px 8px", minHeight: "auto" }}
+              className="kisan-input text-xs select-compact"
             >
               <option value="en-US">English</option>
               <option value="hi-IN">Hindi / हिंदी</option>
@@ -384,26 +393,16 @@ export default function Chat({ lang, showRainWarning, sidebarOpen, setSidebarOpe
           </div>
         </div>
 
-        <div
-          style={{
-            maxHeight: 320,
-            overflowY: "auto",
-            display: "flex",
-            flexDirection: "column",
-            gap: 9,
-            marginBottom: 12,
-          }}
-        >
+        <div className="chat-messages">
           {messages.map((m, i) => (
             <div key={i} className={m.role === "user" ? "chat-bubble user" : "chat-bubble bot"}>
               <ReactMarkdown>{m.text}</ReactMarkdown>
               {m.role === "bot" && (
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px", marginTop: "12px", borderTop: "1px solid var(--border-light)", paddingTop: "8px" }}>
+                <div className="chat-bubble-actions">
                   <DosageCalculator />
                   <button 
                     onClick={() => handleSpeak(m.text)}
-                    className="p-1.5 rounded-lg hover:bg-emerald-50 dark:hover:bg-zinc-800 text-zinc-500 hover:text-emerald-600 dark:hover:text-emerald-400 border-none bg-transparent cursor-pointer flex items-center justify-center transition-colors"
-                    style={{ fontSize: "14px" }}
+                    className="chat-speaker-btn"
                     title={hi ? "उत्तर सुनें" : "Listen to response"}
                   >
                     🔊
@@ -417,16 +416,11 @@ export default function Chat({ lang, showRainWarning, sidebarOpen, setSidebarOpe
         </div>
 
         {attachedImagePreview && (
-          <div style={{ position: "relative", display: "inline-block", marginBottom: "10px", padding: "4px" }}>
+          <div className="chat-attachment-preview">
             <img
               src={attachedImagePreview}
               alt="attachment preview"
-              style={{
-                height: "60px",
-                borderRadius: "8px",
-                border: "1px solid var(--border-light)",
-                objectFit: "cover",
-              }}
+              className="chat-attachment-img"
             />
             <button
               onClick={() => {
@@ -434,30 +428,14 @@ export default function Chat({ lang, showRainWarning, sidebarOpen, setSidebarOpe
                 URL.revokeObjectURL(attachedImagePreview);
                 setAttachedImagePreview(null);
               }}
-              style={{
-                position: "absolute",
-                top: 0,
-                right: 0,
-                background: "#ff4d4f",
-                color: "#fff",
-                border: "none",
-                borderRadius: "50%",
-                width: "18px",
-                height: "18px",
-                fontSize: "10px",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                padding: 0,
-              }}
+              className="chat-attachment-close"
             >
               ✕
             </button>
           </div>
         )}
 
-        <div style={{ display: "flex", gap: 9, alignItems: "center" }}>
+        <div className="chat-input-bar">
           <input
             type="file"
             accept="image/*"
@@ -467,7 +445,7 @@ export default function Chat({ lang, showRainWarning, sidebarOpen, setSidebarOpe
           />
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="icon-btn"
+            className="icon-btn attach-btn"
             type="button"
             aria-label={hi ? "छवि संलग्न करें" : "Attach Image"}
           >
@@ -482,8 +460,7 @@ export default function Chat({ lang, showRainWarning, sidebarOpen, setSidebarOpe
           />
           <button
             onClick={() => send()}
-            className="icon-btn"
-            style={{ background: "var(--primary-color)", color: "#fff", borderColor: "var(--primary-color)" }}
+            className="icon-btn send-btn"
             aria-label={hi ? "भेजें" : "Send"}
           >
             ➤

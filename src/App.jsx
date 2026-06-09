@@ -161,6 +161,7 @@ function App() {
             sidebarOpen={sidebarOpen}
             setSidebarOpen={setSidebarOpen}
             weather={weather}
+            setActiveTab={setActiveTab}
           />
         )}
       </div>
