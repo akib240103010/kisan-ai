@@ -11,6 +11,17 @@ const quickPrompts = {
 
 const BASE = import.meta.env.VITE_API_URL || "http://localhost:3001";
 
+// Clean markdown format characters for natural-sounding speech output
+function cleanMarkdownForSpeech(text) {
+  if (!text) return "";
+  return text
+    .replace(/[#*`_~]/g, "") // Remove Markdown styling characters
+    .replace(/💰 Estimated Cost:/gi, "") // Clean cost prefix
+    .replace(/⚡|🚨|🧪|🌿|💧|💰/g, "") // Strip emojis
+    .replace(/[\n\r]+/g, ". ") // Replace newlines with full stops for pauses
+    .trim();
+}
+
 export default function Chat({ lang, showRainWarning, sidebarOpen, setSidebarOpen, weather }) {
   const [messages, setMessages] = useState([
     {
@@ -37,6 +48,47 @@ export default function Chat({ lang, showRainWarning, sidebarOpen, setSidebarOpe
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // Page unmount cleanup to stop any active speech synthesis
+  useEffect(() => {
+    return () => {
+      if ("speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
+
+  function handleSpeak(text) {
+    if (!("speechSynthesis" in window)) {
+      alert(hi ? "माफ करें, आपका ब्राउज़र टेक्स्ट-टू-स्पीच का समर्थन नहीं करता है।" : "Sorry, your browser does not support the Web Speech API (Text-to-Speech).");
+      return;
+    }
+
+    // Cancel any active speech synthesis playbacks
+    window.speechSynthesis.cancel();
+
+    // Clean text before reading
+    const cleanedText = cleanMarkdownForSpeech(text);
+    if (!cleanedText) return;
+
+    const utterance = new SpeechSynthesisUtterance(cleanedText);
+    
+    // Choose appropriate language code based on current language state
+    const langCode = lang === "hi" ? "hi-IN" : "en-US";
+    utterance.lang = langCode;
+
+    // Search for browser voice matching active language code
+    const voices = window.speechSynthesis.getVoices();
+    const matchedVoice = voices.find(
+      (v) => v.lang.toLowerCase().replace("_", "-") === langCode.toLowerCase()
+    ) || voices.find((v) => v.lang.startsWith(langCode.substring(0, 2)));
+
+    if (matchedVoice) {
+      utterance.voice = matchedVoice;
+    }
+
+    window.speechSynthesis.speak(utterance);
+  }
 
   // 1. Authenticate user and load active sessions on mount
   useEffect(() => {
@@ -216,11 +268,16 @@ export default function Chat({ lang, showRainWarning, sidebarOpen, setSidebarOpe
       }
 
       setMessages((prev) => [...prev, { role: "bot", text: botReply }]);
+      // Automatic read-aloud: speak the new AI response
+      handleSpeak(botReply);
     } catch {
+      const errText = hi ? "माफ करें, जुड़ नहीं पाया।" : "Sorry, could not connect to server.";
       setMessages((prev) => [
         ...prev,
-        { role: "bot", text: hi ? "माफ करें, जुड़ नहीं पाया।" : "Sorry, could not connect to server." },
+        { role: "bot", text: errText },
       ]);
+      // Automatic read-aloud of fallback connection error
+      handleSpeak(errText);
     }
     setLoading(false);
   }
@@ -311,7 +368,19 @@ export default function Chat({ lang, showRainWarning, sidebarOpen, setSidebarOpe
           {messages.map((m, i) => (
             <div key={i} className={m.role === "user" ? "chat-bubble user" : "chat-bubble bot"}>
               <ReactMarkdown>{m.text}</ReactMarkdown>
-              {m.role === "bot" && <DosageCalculator />}
+              {m.role === "bot" && (
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px", marginTop: "12px", borderTop: "1px solid var(--border-light)", paddingTop: "8px" }}>
+                  <DosageCalculator />
+                  <button 
+                    onClick={() => handleSpeak(m.text)}
+                    className="p-1.5 rounded-lg hover:bg-emerald-50 dark:hover:bg-zinc-800 text-zinc-500 hover:text-emerald-600 dark:hover:text-emerald-400 border-none bg-transparent cursor-pointer flex items-center justify-center transition-colors"
+                    style={{ fontSize: "14px" }}
+                    title={hi ? "उत्तर सुनें" : "Listen to response"}
+                  >
+                    🔊
+                  </button>
+                </div>
+              )}
             </div>
           ))}
           {loading && <div className="chat-bubble thinking">{hi ? "सोच रहा हूँ..." : "Thinking..."}</div>}
