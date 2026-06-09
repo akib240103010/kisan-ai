@@ -20,10 +20,20 @@ function App() {
   const [showRainWarning, setShowRainWarning] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(() => {
     if (typeof window !== "undefined") {
-      return window.innerWidth >= 768;
+      if (window.innerWidth < 768) {
+        return false; // Default to closed on mobile
+      }
+      const saved = localStorage.getItem("kisan_chat_sidebar_open");
+      return saved !== null ? saved === "true" : true;
     }
     return false;
   });
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.innerWidth >= 768) {
+      localStorage.setItem("kisan_chat_sidebar_open", isHistoryOpen);
+    }
+  }, [isHistoryOpen]);
 
   const {
     weather,
