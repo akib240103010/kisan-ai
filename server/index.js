@@ -466,8 +466,9 @@ app.post('/api/weather-advice', async (req, res) => {
       - Wind speed: ${weather?.wind || 'N/A'}
       - Rain probability/Cloudiness: ${weather?.rain || 'N/A'}
       - Condition: ${weather?.description || 'N/A'}
+      - UV Index: ${weather?.uvIndex !== undefined ? weather.uvIndex : 'N/A'}
 
-      Generate 3 to 5 short, practical agricultural advices/warnings for a farmer today. E.g. warning about disease risks in high humidity, advising on spraying window based on wind speed, irrigation based on rain probability, harvesting checks.
+      Generate 3 to 5 short, practical agricultural advices/warnings for a farmer today. E.g. warning about disease risks in high humidity, advising on spraying window based on wind speed, irrigation based on rain probability, harvesting checks, or outdoor UV safety advice.
       
       Respond in ${lang === 'hi' ? 'Hindi' : 'English'}.
       Format the output as a JSON array of objects, where each object has:

@@ -2,6 +2,31 @@ import { useState, useEffect, useCallback, useRef } from "react";
 
 const OWM_API_KEY = import.meta.env.VITE_OPENWEATHER_API_KEY || "";
 
+const wmoMap = {
+  0: { icon: "☀️", desc: "Clear sky" },
+  1: { icon: "🌤️", desc: "Mainly clear" },
+  2: { icon: "⛅", desc: "Partly cloudy" },
+  3: { icon: "☁️", desc: "Overcast" },
+  45: { icon: "🌫️", desc: "Fog" },
+  48: { icon: "🌫️", desc: "Depositing rime fog" },
+  51: { icon: "🌦️", desc: "Light drizzle" },
+  53: { icon: "🌦️", desc: "Moderate drizzle" },
+  55: { icon: "🌦️", desc: "Dense drizzle" },
+  61: { icon: "🌧️", desc: "Light rain" },
+  63: { icon: "🌧️", desc: "Moderate rain" },
+  65: { icon: "🌧️", desc: "Heavy rain" },
+  80: { icon: "🌧️", desc: "Light rain showers" },
+  81: { icon: "🌧️", desc: "Moderate rain showers" },
+  82: { icon: "🌧️", desc: "Violent rain showers" },
+  95: { icon: "⛈️", desc: "Thunderstorm" },
+  96: { icon: "⛈️", desc: "Thunderstorm with hail" },
+  99: { icon: "⛈️", desc: "Severe thunderstorm" },
+};
+
+function getWMOInfo(code) {
+  return wmoMap[code] || { icon: "🌦️", desc: "Variable weather" };
+}
+
 export default function useWeather() {
   // Smart Default: Load initial weather from localStorage if available
   const [weather, setWeather] = useState(() => {
@@ -24,25 +49,88 @@ export default function useWeather() {
     weatherRef.current = weather;
   }, [weather]);
 
+  const fetchForecast = async (lat, lon, fetchedBase) => {
+    try {
+      const openMeteoUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max,temperature_2m_min,uv_index_max,weathercode,windspeed_10m_max,winddirection_10m_dominant,precipitation_sum&timezone=auto&wind_speed_unit=kmh`;
+      const meteoRes = await fetch(openMeteoUrl);
+      if (meteoRes.ok) {
+        const meteoData = await meteoRes.json();
+        if (meteoData.daily) {
+          const daily = meteoData.daily;
+          const forecastList = daily.time.map((time, idx) => ({
+            date: time,
+            tempMax: `${Math.round(daily.temperature_2m_max[idx])}°C`,
+            tempMin: `${Math.round(daily.temperature_2m_min[idx])}°C`,
+            uvIndex: daily.uv_index_max[idx],
+            weatherCode: daily.weathercode[idx],
+            windSpeed: `${Math.round(daily.windspeed_10m_max[idx])} km/h`,
+            windDir: daily.winddirection_10m_dominant[idx],
+            precipitation: `${daily.precipitation_sum[idx]} mm`
+          }));
+          
+          fetchedBase.forecast = forecastList;
+          fetchedBase.uvIndex = daily.uv_index_max[0] || 0;
+          fetchedBase.windDir = daily.winddirection_10m_dominant[0] || fetchedBase.windDir || 0;
+          fetchedBase.precipitation = `${daily.precipitation_sum[0] || 0} mm`;
+        }
+      }
+    } catch (err) {
+      console.warn("Failed to fetch forecast from Open-Meteo:", err);
+      // Fallback empty forecast if it fails
+      fetchedBase.forecast = [];
+      fetchedBase.uvIndex = fetchedBase.uvIndex || 0;
+      fetchedBase.windDir = fetchedBase.windDir || 0;
+      fetchedBase.precipitation = fetchedBase.precipitation || "0 mm";
+    }
+    return fetchedBase;
+  };
+
   const fetchWeatherByCoords = useCallback(async (lat, lon) => {
     setLoading(true);
     setError(null);
     try {
       if (!OWM_API_KEY) {
-        // Fallback Mock Data if no API key is provided
-        console.warn("OpenWeatherMap API key not found. Using fallback mock weather.");
-        await new Promise((r) => setTimeout(r, 800));
-        const mocked = {
-          temp: "32°C",
-          humidity: "68%",
-          wind: "12 km/h",
-          rain: "20%",
-          description: "scattered clouds",
-          main: "Clouds",
-          cityName: "Patna (Mocked)",
+        // Fallback to purely Open-Meteo weather and geocoding if no API key is provided
+        console.warn("OpenWeatherMap API key not found. Using Open-Meteo for coordinates weather.");
+        
+        const openMeteoUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,wind_speed_10m,wind_direction_10m,precipitation,weather_code&daily=temperature_2m_max,temperature_2m_min,uv_index_max,weathercode,windspeed_10m_max,winddirection_10m_dominant,precipitation_sum&timezone=auto&wind_speed_unit=kmh`;
+        const res = await fetch(openMeteoUrl);
+        if (!res.ok) throw new Error("Failed to fetch weather from Open-Meteo");
+        const data = await res.json();
+        
+        const current = data.current;
+        const wmoInfo = getWMOInfo(current.weather_code);
+        
+        const fetched = {
+          temp: `${Math.round(current.temperature_2m)}°C`,
+          humidity: `${current.relative_humidity_2m}%`,
+          wind: `${Math.round(current.wind_speed_10m)} km/h`,
+          rain: `10%`, // estimate clouds
+          description: wmoInfo.desc,
+          main: wmoInfo.icon,
+          cityName: `GPS Location (${lat.toFixed(2)}, ${lon.toFixed(2)})`,
+          windDir: current.wind_direction_10m,
+          uvIndex: data.daily?.uv_index_max?.[0] || 0,
+          precipitation: `${current.precipitation} mm`,
+          forecast: []
         };
-        setWeather(mocked);
-        localStorage.setItem("kisan_last_weather", JSON.stringify(mocked));
+        
+        if (data.daily) {
+          const daily = data.daily;
+          fetched.forecast = daily.time.map((time, idx) => ({
+            date: time,
+            tempMax: `${Math.round(daily.temperature_2m_max[idx])}°C`,
+            tempMin: `${Math.round(daily.temperature_2m_min[idx])}°C`,
+            uvIndex: daily.uv_index_max[idx],
+            weatherCode: daily.weathercode[idx],
+            windSpeed: `${Math.round(daily.windspeed_10m_max[idx])} km/h`,
+            windDir: daily.winddirection_10m_dominant[idx],
+            precipitation: `${daily.precipitation_sum[idx]} mm`
+          }));
+        }
+        
+        setWeather(fetched);
+        localStorage.setItem("kisan_last_weather", JSON.stringify(fetched));
         setLoading(false);
         return;
       }
@@ -52,7 +140,7 @@ export default function useWeather() {
       if (!res.ok) throw new Error("Failed to fetch weather from OpenWeatherMap");
       const data = await res.json();
       
-      const fetched = {
+      let fetched = {
         temp: `${Math.round(data.main.temp)}°C`,
         humidity: `${data.main.humidity}%`,
         wind: `${Math.round(data.wind.speed * 3.6)} km/h`, // convert m/s to km/h
@@ -60,7 +148,12 @@ export default function useWeather() {
         description: data.weather?.[0]?.description || "clear sky",
         main: data.weather?.[0]?.main || "Clear",
         cityName: data.name || "Unknown Location",
+        windDir: data.wind?.deg || 0,
       };
+      
+      // Fetch 7-day outlook and UV index from Open-Meteo and merge
+      fetched = await fetchForecast(lat, lon, fetched);
+      
       setWeather(fetched);
       localStorage.setItem("kisan_last_weather", JSON.stringify(fetched));
     } catch (err) {
@@ -77,20 +170,59 @@ export default function useWeather() {
     setError(null);
     try {
       if (!OWM_API_KEY) {
-        // Fallback Mock Data if no API key is provided
-        console.warn("OpenWeatherMap API key not found. Using fallback mock weather.");
-        await new Promise((r) => setTimeout(r, 800));
-        const mocked = {
-          temp: "30°C",
-          humidity: "75%",
-          wind: "15 km/h",
-          rain: "60%",
-          description: "light rain",
-          main: "Rain",
-          cityName: cityName,
+        console.warn("OpenWeatherMap API key not found. Resolving coordinates via Open-Meteo Geocoding.");
+        const geoUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(cityName)}&count=1&language=en&format=json`;
+        const geoRes = await fetch(geoUrl);
+        if (!geoRes.ok) throw new Error("City lookup failed");
+        const geoData = await geoRes.json();
+        if (!geoData.results || geoData.results.length === 0) {
+          throw new Error("City not found");
+        }
+        
+        const cityInfo = geoData.results[0];
+        const lat = cityInfo.latitude;
+        const lon = cityInfo.longitude;
+        const resolvedName = cityInfo.name;
+        
+        // Now fetch details using coordinates
+        const openMeteoUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,wind_speed_10m,wind_direction_10m,precipitation,weather_code&daily=temperature_2m_max,temperature_2m_min,uv_index_max,weathercode,windspeed_10m_max,winddirection_10m_dominant,precipitation_sum&timezone=auto&wind_speed_unit=kmh`;
+        const res = await fetch(openMeteoUrl);
+        if (!res.ok) throw new Error("Failed to fetch weather details");
+        const data = await res.json();
+        
+        const current = data.current;
+        const wmoInfo = getWMOInfo(current.weather_code);
+        
+        const fetched = {
+          temp: `${Math.round(current.temperature_2m)}°C`,
+          humidity: `${current.relative_humidity_2m}%`,
+          wind: `${Math.round(current.wind_speed_10m)} km/h`,
+          rain: `15%`,
+          description: wmoInfo.desc,
+          main: wmoInfo.icon,
+          cityName: resolvedName,
+          windDir: current.wind_direction_10m,
+          uvIndex: data.daily?.uv_index_max?.[0] || 0,
+          precipitation: `${current.precipitation} mm`,
+          forecast: []
         };
-        setWeather(mocked);
-        localStorage.setItem("kisan_last_weather", JSON.stringify(mocked));
+        
+        if (data.daily) {
+          const daily = data.daily;
+          fetched.forecast = daily.time.map((time, idx) => ({
+            date: time,
+            tempMax: `${Math.round(daily.temperature_2m_max[idx])}°C`,
+            tempMin: `${Math.round(daily.temperature_2m_min[idx])}°C`,
+            uvIndex: daily.uv_index_max[idx],
+            weatherCode: daily.weathercode[idx],
+            windSpeed: `${Math.round(daily.windspeed_10m_max[idx])} km/h`,
+            windDir: daily.winddirection_10m_dominant[idx],
+            precipitation: `${daily.precipitation_sum[idx]} mm`
+          }));
+        }
+        
+        setWeather(fetched);
+        localStorage.setItem("kisan_last_weather", JSON.stringify(fetched));
         setLoading(false);
         return;
       }
@@ -100,7 +232,7 @@ export default function useWeather() {
       if (!res.ok) throw new Error("City not found");
       const data = await res.json();
 
-      const fetched = {
+      let fetched = {
         temp: `${Math.round(data.main.temp)}°C`,
         humidity: `${data.main.humidity}%`,
         wind: `${Math.round(data.wind.speed * 3.6)} km/h`,
@@ -108,11 +240,18 @@ export default function useWeather() {
         description: data.weather?.[0]?.description || "clear sky",
         main: data.weather?.[0]?.main || "Clear",
         cityName: data.name || cityName,
+        windDir: data.wind?.deg || 0,
       };
+      
+      const lat = data.coord.lat;
+      const lon = data.coord.lon;
+      
+      // Fetch 7-day outlook and UV index from Open-Meteo and merge
+      fetched = await fetchForecast(lat, lon, fetched);
+      
       setWeather(fetched);
       localStorage.setItem("kisan_last_weather", JSON.stringify(fetched));
     } catch (err) {
-      console.error(err);
       setError(err.message || "City not found");
     } finally {
       setLoading(false);
