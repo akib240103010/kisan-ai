@@ -242,6 +242,7 @@ body {
   max-width: 250px;
   display: flex;
   flex-direction: column;
+  transition: all 0.3s ease;
 }
 
 .chat-sidebar-list {
@@ -1037,13 +1038,27 @@ body {
 
   .chat-sidebar {
     height: 100%;
+    transition: all 0.3s ease;
+    overflow: hidden;
+  }
+
+  .chat-sidebar.collapsed {
+    flex: 0 0 0 !important;
+    width: 0 !important;
+    min-width: 0 !important;
+    max-width: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    margin: 0 !important;
+    opacity: 0;
+    pointer-events: none;
   }
 
   .chat-main {
     height: 100%;
   }
 
-  .chat-back-btn, .chat-menu-btn {
+  .chat-back-btn {
     display: none !important; /* Hidden on desktop/tablet */
   }
 }

@@ -18,7 +18,12 @@ function App() {
   const [activeTab, setActiveTab] = useState("diagnose");
   const [lang, setLang] = useState("en");
   const [showRainWarning, setShowRainWarning] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(() => {
+    if (typeof window !== "undefined") {
+      return window.innerWidth >= 768;
+    }
+    return false;
+  });
 
   const {
     weather,
@@ -89,7 +94,7 @@ function App() {
         {activeTab === "chat" && (
           <button 
             className="menu-toggle-btn" 
-            onClick={() => setSidebarOpen((prev) => !prev)}
+            onClick={() => setIsHistoryOpen((prev) => !prev)}
             aria-label="Toggle Chat History"
             style={{ marginRight: "4px" }}
           >
@@ -131,7 +136,7 @@ function App() {
             className={activeTab === tab.id ? "tab active" : "tab"}
             onClick={() => {
               setActiveTab(tab.id);
-              if (tab.id !== "chat") setSidebarOpen(false);
+              if (tab.id !== "chat" && window.innerWidth < 768) setIsHistoryOpen(false);
             }}
           >
             {tab.label}
@@ -158,8 +163,8 @@ function App() {
           <Chat 
             lang={lang} 
             showRainWarning={showRainWarning} 
-            sidebarOpen={sidebarOpen}
-            setSidebarOpen={setSidebarOpen}
+            isHistoryOpen={isHistoryOpen}
+            setIsHistoryOpen={setIsHistoryOpen}
             weather={weather}
             setActiveTab={setActiveTab}
           />

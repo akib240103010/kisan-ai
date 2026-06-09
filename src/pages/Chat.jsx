@@ -23,7 +23,7 @@ function cleanMarkdownForSpeech(text) {
     .trim();
 }
 
-export default function Chat({ lang, showRainWarning, sidebarOpen, setSidebarOpen, weather, setActiveTab }) {
+export default function Chat({ lang, showRainWarning, isHistoryOpen, setIsHistoryOpen, weather, setActiveTab }) {
   const [messages, setMessages] = useState([
     {
       role: "bot",
@@ -255,7 +255,9 @@ export default function Chat({ lang, showRainWarning, sidebarOpen, setSidebarOpe
         const newSession = await res.json();
         setSessionId(newSession.id);
         setSessions((prev) => [newSession, ...prev]);
-        setSidebarOpen(false); // Close sidebar on mobile after creation
+        if (window.innerWidth < 768) {
+          setIsHistoryOpen(false); // Close sidebar on mobile after creation
+        }
       }
     } catch (err) {
       console.error("Error creating new chat:", err);
@@ -349,10 +351,10 @@ export default function Chat({ lang, showRainWarning, sidebarOpen, setSidebarOpe
   return (
     <div className="chat-container">
       {/* Mobile Sidebar Overlay */}
-      {sidebarOpen && <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />}
+      {isHistoryOpen && <div className="sidebar-overlay" onClick={() => setIsHistoryOpen(false)} />}
 
       {/* Sidebar - Chat Sessions Panel */}
-      <div className={`chat-sidebar card ${sidebarOpen ? "open" : ""}`}>
+      <div className={`chat-sidebar card ${isHistoryOpen ? "open" : "collapsed"}`}>
         <div className="card-title">📁 {hi ? "बातचीत इतिहास" : "Chat History"}</div>
         <button
           onClick={createNewChat}
@@ -367,7 +369,9 @@ export default function Chat({ lang, showRainWarning, sidebarOpen, setSidebarOpe
               key={s.id}
               onClick={() => {
                 setSessionId(s.id);
-                setSidebarOpen(false); // Close sidebar on mobile after selection
+                if (window.innerWidth < 768) {
+                  setIsHistoryOpen(false); // Close sidebar on mobile after selection
+                }
               }}
               className={sessionId === s.id ? "session-btn active" : "session-btn"}
             >
@@ -395,8 +399,9 @@ export default function Chat({ lang, showRainWarning, sidebarOpen, setSidebarOpe
             </div>
           </div>
           <button 
+            type="button"
             className="chat-menu-btn" 
-            onClick={() => setSidebarOpen(prev => !prev)} 
+            onClick={() => setIsHistoryOpen(prev => !prev)} 
             aria-label={hi ? "इतिहास" : "History"}
           >
             ☰
