@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import ReactMarkdown from 'react-markdown';
 import imageCompression from 'browser-image-compression';
 const crops    = ["Wheat","Rice","Maize","Soybean","Potato","Tomato","Cotton","Mustard"];
@@ -12,7 +12,19 @@ export default function Diagnose({ lang }) {
   const [preview, setPreview]           = useState(null);
   const [loading, setLoading]           = useState(false);
   const [result, setResult]             = useState(null);
+  const [showGuideModal, setShowGuideModal] = useState(false);
   const hi = lang === "hi";
+
+  useEffect(() => {
+    const hasSeenGuide = localStorage.getItem("kisan_diagnose_guide_seen");
+    if (!hasSeenGuide) {
+      const timer = setTimeout(() => {
+        setShowGuideModal(true);
+        localStorage.setItem("kisan_diagnose_guide_seen", "true");
+      }, 400); // Smooth entry delay after page render
+      return () => clearTimeout(timer);
+    }
+  }, []);
 
   async function handleImage(e) {
     const file = e.target.files[0];
@@ -89,7 +101,16 @@ export default function Diagnose({ lang }) {
       </div>
 
       <div className="card">
-        <div className="card-title">📷 {hi ? "फसल की फोटो अपलोड करें" : "Upload crop photo"}</div>
+        <div className="card-title" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span>📷 {hi ? "फसल की फोटो अपलोड करें" : "Upload crop photo"}</span>
+          <button 
+            type="button" 
+            className="guide-toggle-btn"
+            onClick={() => setShowGuideModal(true)}
+          >
+            💡 {hi ? "उपयोग निर्देश" : "How to Use"}
+          </button>
+        </div>
         <label className="upload-area">
             {/* If we have a picture, show the picture. If not, show the upload instructions */}
             {preview ? (
@@ -125,6 +146,56 @@ export default function Diagnose({ lang }) {
           </div>
         )}
       </div>
+
+      {showGuideModal && (
+        <div className="guide-modal-overlay" onClick={() => setShowGuideModal(false)}>
+          <div className="guide-modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="guide-modal-header">
+              <h3>💡 {hi ? "फोटो निर्देश और सहायता" : "Crop Diagnosis Guide"}</h3>
+              <button type="button" className="guide-modal-close" onClick={() => setShowGuideModal(false)}>✕</button>
+            </div>
+            
+            <div className="guide-steps">
+              <div className="guide-step">
+                <div className="step-badge">
+                  <span className="step-number">1</span>
+                </div>
+                <div className="step-icon">📸</div>
+                <div className="step-content">
+                  <h4>{hi ? "फसल का चयन और फोटो" : "Crop Selection & Capture"}</h4>
+                  <p>{hi ? "पहले सही फसल का चयन करें, फिर पत्ते या तने के प्रभावित हिस्से पर ध्यान केंद्रित करते हुए एक स्पष्ट और नज़दीकी फोटो लें।" : "Select the correct crop type first, then capture or select a clear, close-up image focusing on the affected area of the leaf or stem."}</p>
+                </div>
+              </div>
+
+              <div className="guide-step">
+                <div className="step-badge">
+                  <span className="step-number">2</span>
+                </div>
+                <div className="step-icon">☀️</div>
+                <div className="step-content">
+                  <h4>{hi ? "अच्छी रोशनी और फोकस" : "Good Lighting & Focus"}</h4>
+                  <p>{hi ? "दिन के उजाले में फोटो लें या फ़्लैश का उपयोग करें। धुंधली या बहुत तेज़ रोशनी वाली तस्वीरों से बचें।" : "Ensure daylight conditions or use flash. Avoid blurry or extremely bright photos."}</p>
+                </div>
+              </div>
+
+              <div className="guide-step">
+                <div className="step-badge">
+                  <span className="step-number">3</span>
+                </div>
+                <div className="step-icon">🔬</div>
+                <div className="step-content">
+                  <h4>{hi ? "रोग की पहचान और समाधान" : "Diagnose & Resolve"}</h4>
+                  <p>{hi ? "तुरंत फसल विश्लेषण और जैविक उपचार पाने के लिए \"AI से रोग पहचानें\" पर क्लिक करें।" : "Click on \"Diagnose with AI\" to get the immediate crop analysis and organic remedies."}</p>
+                </div>
+              </div>
+            </div>
+
+            <button type="button" className="guide-got-it-btn" onClick={() => setShowGuideModal(false)}>
+              {hi ? "समझ गया" : "Got It"}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
