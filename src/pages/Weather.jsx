@@ -325,6 +325,39 @@ export default function Weather({
           </button>
         </div>
 
+        {/* Loading Spinner State */}
+        {loading && !weather && (
+          <div className="spinner-container">
+            <div className="spinner"></div>
+            <div className="spinner-text">
+              {hi ? "मौसम की जानकारी लोड हो रही है..." : "Loading weather data..."}
+            </div>
+          </div>
+        )}
+
+        {/* User-friendly error boundary for weather failures */}
+        {error && !weather && (
+          <div className="weather-error-card">
+            <div className="weather-error-icon">⚠️</div>
+            <div className="weather-error-title">
+              {hi ? "डेटा प्राप्त करने में त्रुटि" : "Error Fetching Weather"}
+            </div>
+            <div className="weather-error-desc">
+              {error}
+            </div>
+            <button onClick={getLocalWeather} className="weather-retry-btn">
+              🔄 {hi ? "पुनः प्रयास करें" : "Retry GPS Location"}
+            </button>
+          </div>
+        )}
+
+        {/* Default Empty State */}
+        {!weather && !loading && !error && (
+          <div style={{ textAlign: "center", padding: "2.5rem 1.5rem", color: "var(--text-muted)", fontSize: "14px" }}>
+            ℹ️ {hi ? "कृषि मौसम विवरण प्राप्त करने के लिए कृपया शहर खोजें या जीपीएस का उपयोग करें।" : "Please search for a city or use GPS to fetch agricultural weather details."}
+          </div>
+        )}
+
         {/* Dynamic Warning Advisories */}
         {weather && ruleWarnings.length > 0 && (
           <div className="weather-warnings-container">
@@ -385,22 +418,24 @@ export default function Weather({
       )}
 
       {/* AI Advice Card */}
-      <div className="card">
-        <div className="card-title">
-          💡 {hi ? "आज की खेती सलाह" : "AI farming advice for today"}
-          {fetchingAdvice && <span className="text-xs ml-2 text-zinc-400 animate-pulse">({hi ? "अपडेट हो रहा है..." : "updating..."})</span>}
+      {weather && (
+        <div className="card">
+          <div className="card-title">
+            💡 {hi ? "आज की खेती सलाह" : "AI farming advice for today"}
+            {fetchingAdvice && <span className="text-xs ml-2 text-zinc-400 animate-pulse">({hi ? "अपडेट हो रहा है..." : "updating..."})</span>}
+          </div>
+          <ul style={{ listStyle: "none", padding: 0 }}>
+            {advice.map((a, i) => (
+              <li key={i} className="advice-item">
+                <span style={{ color: a.type === "ok" ? "var(--primary-color)" : "#d97706", flexShrink: 0 }}>
+                  {a.type === "ok" ? "✅" : "⚠️"}
+                </span>
+                {a.text}
+              </li>
+            ))}
+          </ul>
         </div>
-        <ul style={{ listStyle: "none", padding: 0 }}>
-          {advice.map((a, i) => (
-            <li key={i} className="advice-item">
-              <span style={{ color: a.type === "ok" ? "var(--primary-color)" : "#d97706", flexShrink: 0 }}>
-                {a.type === "ok" ? "✅" : "⚠️"}
-              </span>
-              {a.text}
-            </li>
-          ))}
-        </ul>
-      </div>
+      )}
     </div>
   );
 }
