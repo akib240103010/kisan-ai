@@ -1,6 +1,14 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 
-const OWM_API_KEY = import.meta.env.VITE_OPENWEATHER_API_KEY || "";
+const OWM_API_KEY = (import.meta.env.VITE_OPENWEATHER_API_KEY || "").trim();
+
+const getMaskedKey = () => {
+  if (!OWM_API_KEY) return "NONE";
+  if (OWM_API_KEY.length <= 8) return "***";
+  return `${OWM_API_KEY.substring(0, 4)}...${OWM_API_KEY.substring(OWM_API_KEY.length - 4)}`;
+};
+
+console.log(`[Weather SDK Init] Loaded Key: ${getMaskedKey()} (Length: ${OWM_API_KEY.length})`);
 
 const wmoMap = {
   0: { icon: "☀️", desc: "Clear sky" },
@@ -56,12 +64,16 @@ const fetchOWMOneCall = async (lat, lon, fetchedBase) => {
   
   // Query OWM One Call 3.0
   const url = `https://api.openweathermap.org/data/3.0/onecall?lat=${lat}&lon=${lon}&exclude=minutely,hourly,alerts&appid=${OWM_API_KEY}&units=metric`;
+  const url25 = `https://api.openweathermap.org/data/2.5/onecall?lat=${lat}&lon=${lon}&exclude=minutely,hourly,alerts&appid=${OWM_API_KEY}&units=metric`;
+  
+  console.log(`[Weather SDK Request] OWM One Call 3.0 URL: ${url.replace(OWM_API_KEY, "[MASKED_KEY]")}`);
   const res = await fetch(url);
   if (!res.ok) {
-    // Fallback to OWM One Call 2.5
-    const url25 = `https://api.openweathermap.org/data/2.5/onecall?lat=${lat}&lon=${lon}&exclude=minutely,hourly,alerts&appid=${OWM_API_KEY}&units=metric`;
+    console.warn(`[Weather SDK Status] OWM One Call 3.0 failed with status ${res.status}. Trying One Call 2.5 fallback.`);
+    console.log(`[Weather SDK Request] OWM One Call 2.5 URL: ${url25.replace(OWM_API_KEY, "[MASKED_KEY]")}`);
     const res25 = await fetch(url25);
     if (!res25.ok) {
+      console.error(`[Weather SDK Error] OWM One Call 2.5 failed with status ${res25.status}`);
       throw new Error(`OWM One Call failed with status ${res25.status}`);
     }
     return parseOWMOneCallData(await res25.json(), fetchedBase);
@@ -71,12 +83,13 @@ const fetchOWMOneCall = async (lat, lon, fetchedBase) => {
 
 const fetchForecast = async (lat, lon, fetchedBase) => {
   try {
-    console.log("Attempting OpenWeatherMap One Call forecast fetch...");
+    console.log(`[Weather SDK Forecast] Attempting OWM One Call forecast fetch (lat: ${lat}, lon: ${lon})...`);
     return await fetchOWMOneCall(lat, lon, fetchedBase);
   } catch (owmErr) {
-    console.warn("OpenWeatherMap One Call failed, falling back to Open-Meteo forecast:", owmErr.message);
+    console.warn(`[Weather SDK Forecast Warning] OWM One Call failed, falling back to Open-Meteo forecast. Reason: ${owmErr.message}`);
     try {
       const openMeteoUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max,temperature_2m_min,uv_index_max,weathercode,windspeed_10m_max,winddirection_10m_dominant,precipitation_sum&timezone=auto&wind_speed_unit=kmh`;
+      console.log(`[Weather SDK Request] Open-Meteo Forecast URL: ${openMeteoUrl}`);
       const meteoRes = await fetch(openMeteoUrl);
       if (meteoRes.ok) {
         const meteoData = await meteoRes.json();
@@ -100,7 +113,7 @@ const fetchForecast = async (lat, lon, fetchedBase) => {
         }
       }
     } catch (err) {
-      console.warn("Failed to fetch forecast from Open-Meteo:", err);
+      console.warn("[Weather SDK Error] Failed to fetch forecast from Open-Meteo:", err);
       fetchedBase.forecast = [];
       fetchedBase.uvIndex = fetchedBase.uvIndex || 0;
       fetchedBase.windDir = fetchedBase.windDir || 0;
@@ -138,10 +151,12 @@ export default function useWeather() {
     let fetched = null;
     let success = false;
 
+    console.log(`[Weather SDK Fetch] Starting coordinates fetch (lat: ${lat}, lon: ${lon}). Key: ${getMaskedKey()}`);
+
     if (OWM_API_KEY) {
       try {
-        console.log("Attempting OpenWeatherMap weather fetch by coordinates...");
         const url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${OWM_API_KEY}&units=metric`;
+        console.log(`[Weather SDK Request] OWM Current Weather URL: ${url.replace(OWM_API_KEY, "[MASKED_KEY]")}`);
         const res = await fetch(url);
         
         if (res.ok) {
@@ -160,11 +175,12 @@ export default function useWeather() {
           // Fetch 7-day outlook and UV index and merge
           fetched = await fetchForecast(lat, lon, fetched);
           success = true;
+          console.log(`[Weather SDK Success] OWM coordinates fetch succeeded for ${fetched.cityName}`);
         } else {
-          console.warn(`OpenWeatherMap coordinates fetch returned status ${res.status}. Falling back to Open-Meteo.`);
+          console.warn(`[Weather SDK Warning] OWM coordinates fetch returned status ${res.status}. Falling back to Open-Meteo.`);
         }
       } catch (err) {
-        console.warn("OpenWeatherMap fetch failed, falling back to Open-Meteo:", err);
+        console.warn("[Weather SDK Warning] OWM coordinates fetch failed, falling back to Open-Meteo:", err);
       }
     }
 
@@ -172,8 +188,12 @@ export default function useWeather() {
       try {
         console.log("Fetching coordinates weather from Open-Meteo fallback...");
         const openMeteoUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,wind_speed_10m,wind_direction_10m,precipitation,weather_code&daily=temperature_2m_max,temperature_2m_min,uv_index_max,weathercode,windspeed_10m_max,winddirection_10m_dominant,precipitation_sum&timezone=auto&wind_speed_unit=kmh`;
+        console.log(`[Weather SDK Request] Open-Meteo Fallback URL: ${openMeteoUrl}`);
         const res = await fetch(openMeteoUrl);
-        if (!res.ok) throw new Error("Failed to fetch weather from Open-Meteo");
+        if (!res.ok) {
+          console.error(`[Weather SDK Error] Open-Meteo coordinates query failed with status ${res.status}`);
+          throw new Error("Failed to fetch weather from Open-Meteo");
+        }
         const data = await res.json();
         
         const current = data.current;
@@ -207,8 +227,9 @@ export default function useWeather() {
           }));
         }
         success = true;
+        console.log(`[Weather SDK Success] Open-Meteo coordinates fallback succeeded`);
       } catch (err) {
-        console.error("All weather APIs failed by coordinates:", err);
+        console.error("[Weather SDK Error] All weather APIs failed by coordinates:", err);
         setError("Unable to retrieve weather. Please check connection or search manually.");
         setWeather(null); // Clear stale cache on error
       }
@@ -228,10 +249,12 @@ export default function useWeather() {
     let fetched = null;
     let success = false;
 
+    console.log(`[Weather SDK Fetch] Starting city lookup for: "${cityName}". Key: ${getMaskedKey()}`);
+
     if (OWM_API_KEY) {
       try {
-        console.log(`Attempting OpenWeatherMap fetch for city: ${cityName}...`);
         const url = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(cityName)}&appid=${OWM_API_KEY}&units=metric`;
+        console.log(`[Weather SDK Request] OWM City Current Weather URL: ${url.replace(OWM_API_KEY, "[MASKED_KEY]")}`);
         const res = await fetch(url);
         
         if (res.ok) {
@@ -253,23 +276,28 @@ export default function useWeather() {
           // Fetch forecast and merge
           fetched = await fetchForecast(lat, lon, fetched);
           success = true;
+          console.log(`[Weather SDK Success] OWM city fetch succeeded for ${fetched.cityName}`);
         } else {
-          console.warn(`OpenWeatherMap city fetch returned status ${res.status}. Falling back to Open-Meteo.`);
+          console.warn(`[Weather SDK Warning] OWM city fetch returned status ${res.status}. Falling back to Open-Meteo.`);
         }
       } catch (err) {
-        console.warn("OpenWeatherMap city fetch failed. Falling back to Open-Meteo Geocoding:", err);
+        console.warn("[Weather SDK Warning] OWM city fetch failed, falling back to Open-Meteo Geocoding:", err);
       }
     }
 
     if (!success) {
       try {
-        console.log("Resolving city coordinates via Open-Meteo Geocoding...");
         const geoUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(cityName)}&count=1&language=en&format=json`;
+        console.log(`[Weather SDK Request] Open-Meteo Geocoding URL: ${geoUrl}`);
         const geoRes = await fetch(geoUrl);
-        if (!geoRes.ok) throw new Error("City lookup failed");
+        if (!geoRes.ok) {
+          console.error(`[Weather SDK Error] Open-Meteo Geocoding failed with status ${geoRes.status}`);
+          throw new Error("City lookup failed");
+        }
         const geoData = await geoRes.json();
         
         if (!geoData.results || geoData.results.length === 0) {
+          console.error(`[Weather SDK Error] Open-Meteo Geocoding returned 0 results for: "${cityName}"`);
           throw new Error("City not found");
         }
         
@@ -278,10 +306,15 @@ export default function useWeather() {
         const lon = cityInfo.longitude;
         const resolvedName = `${cityInfo.name}${cityInfo.admin1 ? `, ${cityInfo.admin1}` : ""}${cityInfo.country ? `, ${cityInfo.country}` : ""}`;
         
-        console.log(`Resolved city to coords: ${lat}, ${lon}. Fetching forecast...`);
+        console.log(`[Weather SDK Geocode Success] Resolved "${cityName}" to coords: ${lat}, ${lon} (${resolvedName}). Fetching details...`);
+        
         const openMeteoUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,wind_speed_10m,wind_direction_10m,precipitation,weather_code&daily=temperature_2m_max,temperature_2m_min,uv_index_max,weathercode,windspeed_10m_max,winddirection_10m_dominant,precipitation_sum&timezone=auto&wind_speed_unit=kmh`;
+        console.log(`[Weather SDK Request] Open-Meteo Fallback Weather URL: ${openMeteoUrl}`);
         const res = await fetch(openMeteoUrl);
-        if (!res.ok) throw new Error("Failed to fetch weather details from Open-Meteo");
+        if (!res.ok) {
+          console.error(`[Weather SDK Error] Open-Meteo details query failed with status ${res.status}`);
+          throw new Error("Failed to fetch weather details from Open-Meteo");
+        }
         const data = await res.json();
         
         const current = data.current;
@@ -315,8 +348,9 @@ export default function useWeather() {
           }));
         }
         success = true;
+        console.log(`[Weather SDK Success] Open-Meteo city fallback succeeded for ${fetched.cityName}`);
       } catch (err) {
-        console.error("All weather APIs failed by city:", err);
+        console.error("[Weather SDK Error] All weather APIs failed by city:", err);
         setError(err.message || "City not found");
         setWeather(null); // Clear stale cache on error
       }
