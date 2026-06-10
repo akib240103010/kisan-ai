@@ -353,194 +353,202 @@ export default function Chat({ lang, showRainWarning, isHistoryOpen, setIsHistor
       {/* Mobile Sidebar Overlay */}
       {isHistoryOpen && <div className="sidebar-overlay" onClick={() => setIsHistoryOpen(false)} />}
 
-      {/* Sidebar - Chat Sessions Panel */}
-      <div className={`chat-sidebar card ${isHistoryOpen ? "open" : "collapsed"}`}>
-        <div className="card-title">📁 {hi ? "बातचीत इतिहास" : "Chat History"}</div>
-        <button
-          onClick={createNewChat}
-          className="action-btn"
-          style={{ marginBottom: "14px", background: "#f2a900" }}
-        >
-          ➕ {hi ? "नई बातचीत" : "New Chat"}
-        </button>
-        <div className="chat-sidebar-list">
-          {sessions.map((s) => (
-            <button
-              key={s.id}
-              onClick={() => {
-                setSessionId(s.id);
-                if (window.innerWidth < 768) {
-                  setIsHistoryOpen(false); // Close sidebar on mobile after selection
-                }
-              }}
-              className={sessionId === s.id ? "session-btn active" : "session-btn"}
-            >
-              💬 {s.title}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Main Chat Interface */}
+      {/* Unified Chat Wrapper Card */}
       <div className="chat-main card">
-        <div className="chat-header-bar">
-          <button 
-            className="chat-back-btn" 
-            onClick={() => setActiveTab("diagnose")} 
-            aria-label={hi ? "वापस" : "Back"}
-          >
-            ←
-          </button>
-          <div className="chat-header-info">
-            <span className="chat-header-avatar">🌾</span>
-            <div>
-              <h3 className="chat-header-title">{hi ? "किसान AI" : "Kisan AI"}</h3>
-              <p className="chat-header-subtitle">{hi ? "सक्रिय कृषि सहायक" : "Active Farming Assistant"}</p>
-            </div>
+        
+        {/* Sidebar - Chat Sessions Panel (nested inside chat-main) */}
+        <div className={`chat-sidebar ${isHistoryOpen ? "open" : "collapsed"}`}>
+          <div className="card-title" style={{ padding: "16px 16px 8px 16px", marginBottom: 0 }}>
+            📁 {hi ? "बातचीत इतिहास" : "Chat History"}
           </div>
-          <button 
-            type="button"
-            className="chat-menu-btn" 
-            onClick={() => setIsHistoryOpen(prev => !prev)} 
-            aria-label={hi ? "इतिहास" : "History"}
-          >
-            ☰
-          </button>
-        </div>
-
-
-        {showRainWarning && (
-          <div className="chat-rain-warning">
-            <span className="warning-icon">⚠️</span>
-            <span className="warning-text">
-              {lang === "hi"
-                ? "संभावित बारिश के कारण आज रसायनों के छिड़काव से बचें।"
-                : "Avoid spraying chemicals today due to expected rain."}
-            </span>
+          <div style={{ padding: "0 16px 14px 16px" }}>
+            <button
+              onClick={createNewChat}
+              className="action-btn"
+              style={{ background: "#f2a900" }}
+            >
+              ➕ {hi ? "नई बातचीत" : "New Chat"}
+            </button>
           </div>
-        )}
-
-        <div className="chat-settings-bar">
-          <div className="quick-prompts-list">
-            {quickPrompts[lang].map((q) => (
-              <button key={q} onClick={() => send(q)} className="quick-prompt-btn">
-                {q}
+          <div className="chat-sidebar-list">
+            {sessions.map((s) => (
+              <button
+                key={s.id}
+                onClick={() => {
+                  setSessionId(s.id);
+                  if (window.innerWidth < 768) {
+                    setIsHistoryOpen(false); // Close sidebar on mobile after selection
+                  }
+                }}
+                className={sessionId === s.id ? "session-btn active" : "session-btn"}
+              >
+                💬 {s.title}
               </button>
             ))}
           </div>
-          <div className="readout-selector-container">
-            <span className="readout-label">🔊 {hi ? "पढ़ने की भाषा:" : "Readout Lang:"}</span>
-            <select
-              value={ttsLang}
-              onChange={(e) => setTtsLang(e.target.value)}
-              className="kisan-input text-xs select-compact"
+        </div>
+
+        {/* Active Chat Thread container (Header, Messages, Input) */}
+        <div className="chat-thread-container">
+          <div className="chat-header-bar">
+            <button 
+              className="chat-back-btn" 
+              onClick={() => setActiveTab("diagnose")} 
+              aria-label={hi ? "वापस" : "Back"}
             >
-              <option value="en-US">English</option>
-              <option value="hi-IN">Hindi / हिंदी</option>
-              <option value="bho-IN">Bhojpuri / भोजपुरी</option>
-            </select>
-          </div>
-        </div>
-
-        <div className="chat-messages">
-          {messages.map((m, i) => (
-            <div key={i} className={m.role === "user" ? "chat-bubble user" : "chat-bubble bot"}>
-              <ReactMarkdown>{m.text}</ReactMarkdown>
-              {m.role === "bot" && (
-                <div className="chat-bubble-actions">
-                  <DosageCalculator />
-                  <button 
-                    onClick={() => handleSpeak(m.text)}
-                    className="chat-speaker-btn"
-                    title={hi ? "उत्तर सुनें" : "Listen to response"}
-                  >
-                    🔊
-                  </button>
-                </div>
-              )}
+              ←
+            </button>
+            <div className="chat-header-info">
+              <span className="chat-header-avatar">🌾</span>
+              <div>
+                <h3 className="chat-header-title">{hi ? "किसान AI" : "Kisan AI"}</h3>
+                <p className="chat-header-subtitle">{hi ? "सक्रिय कृषि सहायक" : "Active Farming Assistant"}</p>
+              </div>
             </div>
-          ))}
-          {loading && <div className="chat-bubble thinking">{hi ? "सोच रहा हूँ..." : "Thinking..."}</div>}
-          <div ref={bottomRef} />
-        </div>
+            <button 
+              type="button"
+              className="chat-menu-btn" 
+              onClick={() => setIsHistoryOpen(prev => !prev)} 
+              aria-label={hi ? "इतिहास" : "History"}
+            >
+              ☰
+            </button>
+          </div>
 
-        {attachedImagePreview && (
-          <div className="chat-attachment-preview">
-            <img
-              src={attachedImagePreview}
-              alt="attachment preview"
-              className="chat-attachment-img"
+          {showRainWarning && (
+            <div className="chat-rain-warning">
+              <span className="warning-icon">⚠️</span>
+              <span className="warning-text">
+                {lang === "hi"
+                  ? "संभावित बारिश के कारण आज रसायनों के छिड़काव से बचें।"
+                  : "Avoid spraying chemicals today due to expected rain."}
+              </span>
+            </div>
+          )}
+
+          <div className="chat-settings-bar">
+            <div className="quick-prompts-list">
+              {quickPrompts[lang].map((q) => (
+                <button key={q} onClick={() => send(q)} className="quick-prompt-btn">
+                  {q}
+                </button>
+              ))}
+            </div>
+            <div className="readout-selector-container">
+              <span className="readout-label">🔊 {hi ? "पढ़ने की भाषा:" : "Readout Lang:"}</span>
+              <select
+                value={ttsLang}
+                onChange={(e) => setTtsLang(e.target.value)}
+                className="kisan-input text-xs select-compact"
+              >
+                <option value="en-US">English</option>
+                <option value="hi-IN">Hindi / हिंदी</option>
+                <option value="bho-IN">Bhojpuri / भोजपुरी</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="chat-messages">
+            {messages.map((m, i) => (
+              <div key={i} className={m.role === "user" ? "chat-bubble user" : "chat-bubble bot"}>
+                <ReactMarkdown>{m.text}</ReactMarkdown>
+                {m.role === "bot" && (
+                  <div className="chat-bubble-actions">
+                    <DosageCalculator />
+                    <button 
+                      onClick={() => handleSpeak(m.text)}
+                      className="chat-speaker-btn"
+                      title={hi ? "उत्तर सुनें" : "Listen to response"}
+                    >
+                      🔊
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+            {loading && <div className="chat-bubble thinking">{hi ? "सोच रहा हूँ..." : "Thinking..."}</div>}
+            <div ref={bottomRef} />
+          </div>
+
+          {attachedImagePreview && (
+            <div className="chat-attachment-preview">
+              <img
+                src={attachedImagePreview}
+                alt="attachment preview"
+                className="chat-attachment-img"
+              />
+              <button
+                onClick={() => {
+                  setAttachedFile(null);
+                  URL.revokeObjectURL(attachedImagePreview);
+                  setAttachedImagePreview(null);
+                }}
+                className="chat-attachment-close"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
+          <div className="chat-input-bar">
+            <input
+              type="file"
+              accept="image/*"
+              ref={fileInputRef}
+              onChange={handleImageAttachment}
+              style={{ display: "none" }}
             />
             <button
-              onClick={() => {
-                setAttachedFile(null);
-                URL.revokeObjectURL(attachedImagePreview);
-                setAttachedImagePreview(null);
-              }}
-              className="chat-attachment-close"
+              onClick={() => fileInputRef.current?.click()}
+              className="icon-btn attach-btn"
+              type="button"
+              disabled={voiceStatus === "processing" || listening}
+              aria-label={hi ? "छवि संलग्न करें" : "Attach Image"}
             >
-              ✕
+              📷
+            </button>
+            <input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && send()}
+              placeholder={
+                listening 
+                  ? (hi ? "सुन रहा हूँ... बोलें..." : "Listening... Speak...") 
+                  : voiceStatus === "processing" 
+                    ? (hi ? "आवाज संसाधित हो रही है..." : "Processing voice...") 
+                    : (hi ? "सवाल टाइप करें..." : "Type your question...")
+              }
+              className="chat-input"
+              disabled={voiceStatus === "processing" || listening}
+            />
+            {browserSupportsSpeechRecognition && (
+              <button
+                type="button"
+                onClick={toggleListening}
+                className={`icon-btn mic-btn ${listening ? "listening" : ""} ${voiceStatus === "processing" ? "processing" : ""}`}
+                disabled={voiceStatus === "processing"}
+                aria-label={listening ? "Stop listening" : "Start speaking"}
+              >
+                {listening ? (
+                  <span style={{ fontSize: "14px", fontWeight: "bold" }}>■</span>
+                ) : voiceStatus === "processing" ? (
+                  <span className="animate-spin" style={{ fontSize: "14px" }}>⏳</span>
+                ) : (
+                  <span style={{ fontSize: "16px" }}>🎤</span>
+                )}
+              </button>
+            )}
+            <button
+              onClick={() => send()}
+              className="icon-btn send-btn"
+              disabled={voiceStatus === "processing" || listening}
+              aria-label={hi ? "भेजें" : "Send"}
+            >
+              ➤
             </button>
           </div>
-        )}
-
-        <div className="chat-input-bar">
-          <input
-            type="file"
-            accept="image/*"
-            ref={fileInputRef}
-            onChange={handleImageAttachment}
-            style={{ display: "none" }}
-          />
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="icon-btn attach-btn"
-            type="button"
-            disabled={voiceStatus === "processing" || listening}
-            aria-label={hi ? "छवि संलग्न करें" : "Attach Image"}
-          >
-            📷
-          </button>
-          <input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && send()}
-            placeholder={
-              listening 
-                ? (hi ? "सुन रहा हूँ... बोलें..." : "Listening... Speak...") 
-                : voiceStatus === "processing" 
-                  ? (hi ? "आवाज संसाधित हो रही है..." : "Processing voice...") 
-                  : (hi ? "सवाल टाइप करें..." : "Type your question...")
-            }
-            className="chat-input"
-            disabled={voiceStatus === "processing" || listening}
-          />
-          {browserSupportsSpeechRecognition && (
-            <button
-              type="button"
-              onClick={toggleListening}
-              className={`icon-btn mic-btn ${listening ? "listening" : ""} ${voiceStatus === "processing" ? "processing" : ""}`}
-              disabled={voiceStatus === "processing"}
-              aria-label={listening ? "Stop listening" : "Start speaking"}
-            >
-              {listening ? (
-                <span style={{ fontSize: "14px", fontWeight: "bold" }}>■</span>
-              ) : voiceStatus === "processing" ? (
-                <span className="animate-spin" style={{ fontSize: "14px" }}>⏳</span>
-              ) : (
-                <span style={{ fontSize: "16px" }}>🎤</span>
-              )}
-            </button>
-          )}
-          <button
-            onClick={() => send()}
-            className="icon-btn send-btn"
-            disabled={voiceStatus === "processing" || listening}
-            aria-label={hi ? "भेजें" : "Send"}
-          >
-            ➤
-          </button>
         </div>
+
       </div>
     </div>
   );
