@@ -4,11 +4,33 @@ import dotenv from 'dotenv';
 import cors from 'cors';
 import pool from './db.js';
 import multer from 'multer';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
 
 // Load environment variables
 dotenv.config();
 console.log("My API Key is:",process.env.GEMINI_API_KEY);
 const app = express();
+
+// Database Migration: Create auth_users table mapping email/password credentials to users(id)
+const migrateDb = async () => {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS auth_users (
+        id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        name VARCHAR(255) NOT NULL,
+        email VARCHAR(255) UNIQUE NOT NULL,
+        password VARCHAR(255) NOT NULL,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    console.log("[DB Migration] auth_users table successfully created/verified.");
+  } catch (err) {
+    console.error("[DB Migration] Error migrating users table:", err);
+  }
+};
+migrateDb();
 
 const allowedOrigins = [
   'http://localhost:5173',
@@ -295,6 +317,132 @@ app.post('/api/diagnose', async (req, res) => {
 });
 
 // --- DATABASE API ROUTES ---
+
+// 1. Register a new user with name, email, password
+app.post('/api/auth/register', async (req, res) => {
+  const { name, email, password } = req.body;
+
+  if (!name || !email || !password) {
+    return res.status(400).json({ error: "Name, email, and password are required" });
+  }
+
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    return res.status(400).json({ error: "Invalid email format" });
+  }
+
+  if (password.length < 6) {
+    return res.status(400).json({ error: "Password must be at least 6 characters long" });
+  }
+
+  try {
+    const checkUser = await pool.query('SELECT id FROM auth_users WHERE email = $1', [email.toLowerCase().trim()]);
+    if (checkUser.rows.length > 0) {
+      return res.status(400).json({ error: "User with this email already exists" });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    // Generate unique phone number for original users table (length <= 15)
+    const uniquePhone = 'auth_' + Math.random().toString().slice(2, 12);
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      
+      const userRes = await client.query(
+        'INSERT INTO users (phone_number) VALUES ($1) RETURNING id',
+        [uniquePhone]
+      );
+      const userId = userRes.rows[0].id;
+
+      await client.query(
+        'INSERT INTO auth_users (id, name, email, password) VALUES ($1, $2, $3, $4)',
+        [userId, name.trim(), email.toLowerCase().trim(), hashedPassword]
+      );
+
+      await client.query(
+        'INSERT INTO farm_profiles (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING',
+        [userId]
+      );
+
+      await client.query(
+        "INSERT INTO chat_sessions (user_id, title) VALUES ($1, 'General Chat')",
+        [userId]
+      );
+
+      await client.query('COMMIT');
+      res.status(201).json({ success: true, message: "User registered successfully! Please log in." });
+    } catch (txErr) {
+      await client.query('ROLLBACK');
+      throw txErr;
+    } finally {
+      client.release();
+    }
+  } catch (err) {
+    console.error("Registration Error:", err);
+    res.status(500).json({ error: "Failed to register user" });
+  }
+});
+
+// 2. Login user and return JWT with session configurations
+app.post('/api/auth/login', async (req, res) => {
+  const { email, password } = req.body;
+
+  if (!email || !password) {
+    return res.status(400).json({ error: "Email and password are required" });
+  }
+
+  try {
+    const userRes = await pool.query('SELECT * FROM auth_users WHERE email = $1', [email.toLowerCase().trim()]);
+    if (userRes.rows.length === 0) {
+      return res.status(400).json({ error: "Invalid email or password" });
+    }
+    const user = userRes.rows[0];
+
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(400).json({ error: "Invalid email or password" });
+    }
+
+    const jwtSecret = process.env.JWT_SECRET || 'kisan_jwt_secret_key';
+    const token = jwt.sign(
+      { userId: user.id, email: user.email },
+      jwtSecret,
+      { expiresIn: '7d' }
+    );
+
+    let sessionRes = await pool.query(
+      `SELECT id FROM chat_sessions WHERE user_id = $1 ORDER BY created_at DESC LIMIT 1`,
+      [user.id]
+    );
+    
+    let sessionId;
+    if (sessionRes.rows.length > 0) {
+      sessionId = sessionRes.rows[0].id;
+    } else {
+      const newSessionRes = await pool.query(
+        `INSERT INTO chat_sessions (user_id, title) VALUES ($1, 'General Chat') RETURNING id`,
+        [user.id]
+      );
+      sessionId = newSessionRes.rows[0].id;
+    }
+
+    res.json({
+      token,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email
+      },
+      defaultSessionId: sessionId
+    });
+  } catch (err) {
+    console.error("Login Error:", err);
+    res.status(500).json({ error: "Failed to authenticate" });
+  }
+});
 
 // User Login / OTP Upsert
 app.post('/api/users/login', async (req, res) => {

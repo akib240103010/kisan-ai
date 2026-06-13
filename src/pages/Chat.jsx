@@ -23,7 +23,7 @@ function cleanMarkdownForSpeech(text) {
     .trim();
 }
 
-export default function Chat({ lang, showRainWarning, isHistoryOpen, setIsHistoryOpen, weather, setActiveTab }) {
+export default function Chat({ lang, showRainWarning, isHistoryOpen, setIsHistoryOpen, weather, setActiveTab, userId }) {
   const [messages, setMessages] = useState([
     {
       role: "bot",
@@ -35,7 +35,6 @@ export default function Chat({ lang, showRainWarning, isHistoryOpen, setIsHistor
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [userId, setUserId] = useState(null);
   const [sessionId, setSessionId] = useState(null);
   const [sessions, setSessions] = useState([]);
 
@@ -151,32 +150,29 @@ export default function Chat({ lang, showRainWarning, isHistoryOpen, setIsHistor
     window.speechSynthesis.speak(utterance);
   }
 
-  // 1. Authenticate user and load active sessions on mount
+  // 1. Load active sessions on mount or when userId changes
   useEffect(() => {
-    async function initUser() {
+    if (!userId) return;
+    async function loadSessions() {
       try {
-        const res = await fetch(`${BASE}/api/users/login`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ phone_number: "9999999999" }),
-        });
-        if (!res.ok) throw new Error("Login failed");
-        const data = await res.json();
-        setUserId(data.user.id);
-        setSessionId(data.defaultSessionId);
-
-        // Fetch user's sessions
-        const sessionsRes = await fetch(`${BASE}/api/chats/${data.user.id}/sessions`);
+        const sessionsRes = await fetch(`${BASE}/api/chats/${userId}/sessions`);
         if (sessionsRes.ok) {
           const sessionsData = await sessionsRes.json();
           setSessions(sessionsData);
+
+          const storedDefault = localStorage.getItem("kisan_default_session");
+          if (storedDefault) {
+            setSessionId(parseInt(storedDefault));
+          } else if (sessionsData.length > 0) {
+            setSessionId(sessionsData[0].id);
+          }
         }
       } catch (err) {
-        console.error("Login / Session Fetch Error:", err);
+        console.error("Session Fetch Error:", err);
       }
     }
-    initUser();
-  }, []);
+    loadSessions();
+  }, [userId]);
 
   // 2. Load historical messages whenever sessionId changes
   useEffect(() => {

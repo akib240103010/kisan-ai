@@ -3,6 +3,8 @@ import Diagnose from "./pages/Diagnose";
 import Weather from "./pages/Weather";
 import Calendar from "./pages/Calendar";
 import Chat from "./pages/Chat";
+import Login from "./pages/Login";
+import Signup from "./pages/Signup";
 import SchemeAnnouncement from "./components/SchemeAnnouncement";
 import useWeather from "./hooks/useWeather";
 import "./App.css";
@@ -15,6 +17,17 @@ const tabs = [
 ];
 
 function App() {
+  const [token, setToken] = useState(() => localStorage.getItem("kisan_token") || null);
+  const [user, setUser] = useState(() => {
+    try {
+      const saved = localStorage.getItem("kisan_user");
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [authView, setAuthView] = useState("login");
+
   const [activeTab, setActiveTab] = useState("diagnose");
   const [lang, setLang] = useState("en");
   const [showRainWarning, setShowRainWarning] = useState(false);
@@ -96,6 +109,55 @@ function App() {
     }
   }, []);
 
+  if (!token || !user) {
+    return (
+      <div className="app">
+        {/* Header */}
+        <div className="header">
+          <div className="logo">🌾</div>
+          <div className="header-text">
+            <h1>{lang === "en" ? "Kisan AI" : "किसान AI"}</h1>
+            <p>{lang === "en" ? "Your personal farming assistant" : "आपका कृषि सहायक"}</p>
+          </div>
+          <div className="lang-toggle">
+            <button
+              className={lang === "en" ? "lang-btn active" : "lang-btn"}
+              onClick={() => setLang("en")}
+            >EN</button>
+            <button
+              className={lang === "hi" ? "lang-btn active" : "lang-btn"}
+              onClick={() => setLang("hi")}
+            >हिं</button>
+          </div>
+        </div>
+
+        <div className="content" style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "calc(100vh - 120px)" }}>
+          {authView === "login" ? (
+            <Login
+              lang={lang}
+              onLoginSuccess={(newToken, newUser, defaultSessionId) => {
+                localStorage.setItem("kisan_token", newToken);
+                localStorage.setItem("kisan_user", JSON.stringify(newUser));
+                setToken(newToken);
+                setUser(newUser);
+                if (defaultSessionId) {
+                  localStorage.setItem("kisan_default_session", defaultSessionId);
+                }
+              }}
+              switchToSignup={() => setAuthView("signup")}
+            />
+          ) : (
+            <Signup
+              lang={lang}
+              onSignupSuccess={() => setAuthView("login")}
+              switchToLogin={() => setAuthView("login")}
+            />
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="app">
 
@@ -117,6 +179,23 @@ function App() {
           <p>{lang === "en" ? "Your personal farming assistant" : "आपका कृषि सहायक"}</p>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          {/* Logout Button */}
+          <button
+            onClick={() => {
+              localStorage.removeItem("kisan_token");
+              localStorage.removeItem("kisan_user");
+              localStorage.removeItem("kisan_default_session");
+              setToken(null);
+              setUser(null);
+              setAuthView("login");
+            }}
+            className="text-xs bg-emerald-50 dark:bg-zinc-800 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-zinc-700 border border-emerald-100 dark:border-zinc-700 px-2.5 py-1.5 rounded-lg cursor-pointer transition-colors"
+            style={{ fontWeight: "600", fontSize: "12px", border: "1px solid var(--border-light)", background: "var(--bg-card)", color: "var(--primary-color)" }}
+            title={lang === "en" ? "Log Out" : "लॉग आउट"}
+          >
+            {lang === "en" ? "Logout" : "लॉगआउट"}
+          </button>
+
           {/* Theme Toggle Button */}
           <button 
             className="theme-toggle-btn" 
@@ -177,6 +256,7 @@ function App() {
             setIsHistoryOpen={setIsHistoryOpen}
             weather={weather}
             setActiveTab={setActiveTab}
+            userId={user.id}
           />
         )}
       </div>
