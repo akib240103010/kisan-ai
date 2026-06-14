@@ -12,17 +12,16 @@ dotenv.config();
 console.log("My API Key is:",process.env.GEMINI_API_KEY);
 const app = express();
 
-// Database Migration: Create auth_users table mapping email/password credentials to users(id)
+// Database Migration: Create auth_users table
 const migrateDb = async () => {
   try {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS auth_users (
-        id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        id SERIAL PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
         email VARCHAR(255) UNIQUE NOT NULL,
         password VARCHAR(255) NOT NULL,
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
     console.log("[DB Migration] auth_users table successfully created/verified.");
@@ -31,6 +30,7 @@ const migrateDb = async () => {
   }
 };
 migrateDb();
+
 
 const allowedOrigins = [
   'http://localhost:5173',
