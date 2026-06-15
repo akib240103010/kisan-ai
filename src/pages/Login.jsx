@@ -2,7 +2,7 @@ import { useState } from "react";
 
 const BASE = import.meta.env.VITE_API_URL || "http://localhost:3001";
 
-export default function Login({ lang, onLoginSuccess, switchToSignup }) {
+export default function Login({ lang, onLoginSuccess }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -118,15 +118,7 @@ export default function Login({ lang, onLoginSuccess, switchToSignup }) {
           </button>
         </form>
 
-        <div style={{ marginTop: "2rem", textAlign: "center", fontSize: "14px", color: "var(--text-muted)" }}>
-          {hi ? "खाता नहीं है?" : "Don't have an account?"}{" "}
-          <button
-            onClick={switchToSignup}
-            style={{ background: "none", border: "none", color: "var(--primary-color)", fontWeight: "600", cursor: "pointer", padding: 0 }}
-          >
-            {hi ? "नया खाता बनाएं" : "Sign Up"}
-          </button>
-        </div>
+
       </div>
     </div>
   );
