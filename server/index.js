@@ -4,32 +4,11 @@ import dotenv from 'dotenv';
 import cors from 'cors';
 import pool from './db.js';
 import multer from 'multer';
-import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
 
 // Load environment variables
 dotenv.config();
 console.log("My API Key is:",process.env.GEMINI_API_KEY);
 const app = express();
-
-// Database Migration: Create auth_users table
-const migrateDb = async () => {
-  try {
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS auth_users (
-        id SERIAL PRIMARY KEY,
-        name VARCHAR(255) NOT NULL,
-        email VARCHAR(255) UNIQUE NOT NULL,
-        password VARCHAR(255) NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
-    console.log("[DB Migration] auth_users table successfully created/verified.");
-  } catch (err) {
-    console.error("[DB Migration] Error migrating users table:", err);
-  }
-};
-migrateDb();
 
 
 const allowedOrigins = [
@@ -316,130 +295,6 @@ app.post('/api/diagnose', async (req, res) => {
   }
 });
 
-// --- DATABASE API ROUTES ---
-
-
-
-// 2. Login user and return JWT with session configurations
-app.post('/api/auth/login', async (req, res) => {
-  const { email, password } = req.body;
-
-  if (!email || !password) {
-    return res.status(400).json({ error: "Email and password are required" });
-  }
-
-  try {
-    const userRes = await pool.query('SELECT * FROM auth_users WHERE email = $1', [email.toLowerCase().trim()]);
-    if (userRes.rows.length === 0) {
-      return res.status(400).json({ error: "Invalid email or password" });
-    }
-    const user = userRes.rows[0];
-
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
-      return res.status(400).json({ error: "Invalid email or password" });
-    }
-
-    const jwtSecret = process.env.JWT_SECRET || 'kisan_jwt_secret_key';
-    const token = jwt.sign(
-      { userId: user.id, email: user.email },
-      jwtSecret,
-      { expiresIn: '7d' }
-    );
-
-    let sessionRes = await pool.query(
-      `SELECT id FROM chat_sessions WHERE user_id = $1 ORDER BY created_at DESC LIMIT 1`,
-      [user.id]
-    );
-    
-    let sessionId;
-    if (sessionRes.rows.length > 0) {
-      sessionId = sessionRes.rows[0].id;
-    } else {
-      const newSessionRes = await pool.query(
-        `INSERT INTO chat_sessions (user_id, title) VALUES ($1, 'General Chat') RETURNING id`,
-        [user.id]
-      );
-      sessionId = newSessionRes.rows[0].id;
-    }
-
-    res.json({
-      token,
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email
-      },
-      defaultSessionId: sessionId
-    });
-  } catch (err) {
-    console.error("Login Error:", err);
-    res.status(500).json({ error: "Failed to authenticate" });
-  }
-});
-
-// User Login / OTP Upsert
-app.post('/api/users/login', async (req, res) => {
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    const { phone_number } = req.body;
-    if (!phone_number) {
-      return res.status(400).json({ error: 'Phone number is required' });
-    }
-
-    // Upsert User
-    const userRes = await client.query(
-      `INSERT INTO users (phone_number) VALUES ($1)
-       ON CONFLICT (phone_number) DO UPDATE SET updated_at = CURRENT_TIMESTAMP
-       RETURNING id, phone_number`,
-      [phone_number]
-    );
-    const user = userRes.rows[0];
-
-    // Upsert Farm Profile
-    await client.query(
-      `INSERT INTO farm_profiles (user_id) VALUES ($1)
-       ON CONFLICT (user_id) DO NOTHING`,
-      [user.id]
-    );
-
-    // Fetch Profile
-    const profileRes = await client.query(
-      `SELECT * FROM farm_profiles WHERE user_id = $1`,
-      [user.id]
-    );
-    const profile = profileRes.rows[0];
-
-    // Get or Create default session
-    let sessionRes = await client.query(
-      `SELECT id FROM chat_sessions WHERE user_id = $1 ORDER BY created_at DESC LIMIT 1`,
-      [user.id]
-    );
-    
-    let sessionId;
-    if (sessionRes.rows.length > 0) {
-      sessionId = sessionRes.rows[0].id;
-    } else {
-      const newSessionRes = await client.query(
-        `INSERT INTO chat_sessions (user_id, title) VALUES ($1, 'General Chat') RETURNING id`,
-        [user.id]
-      );
-      sessionId = newSessionRes.rows[0].id;
-    }
-
-    await client.query('COMMIT');
-    res.json({ user, profile, defaultSessionId: sessionId });
-  } catch (error) {
-    await client.query('ROLLBACK');
-    console.error("Login Error:", error);
-    res.status(500).json({ error: "Failed to authenticate" });
-  } finally {
-    client.release();
-  }
-});
-
-// Get User Profile
 app.get('/api/profiles/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
@@ -482,10 +337,20 @@ app.put('/api/profiles/:userId', async (req, res) => {
 app.get('/api/chats/:userId/sessions', async (req, res) => {
   try {
     const { userId } = req.params;
-    const result = await pool.query(
+    let result = await pool.query(
       'SELECT * FROM chat_sessions WHERE user_id = $1 ORDER BY created_at DESC',
       [userId]
     );
+    
+    if (result.rows.length === 0) {
+      // Auto-create a default chat session
+      const newSession = await pool.query(
+        'INSERT INTO chat_sessions (user_id, title) VALUES ($1, $2) RETURNING *',
+        [userId, 'General Chat']
+      );
+      result.rows = [newSession.rows[0]];
+    }
+    
     res.json(result.rows);
   } catch (error) {
     console.error("Fetch Sessions Error:", error);

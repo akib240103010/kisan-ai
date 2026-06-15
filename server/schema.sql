@@ -1,25 +1,7 @@
--- Users Table
-CREATE TABLE IF NOT EXISTS users (
-    id SERIAL PRIMARY KEY,
-    phone_number VARCHAR(15) UNIQUE NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
-
--- Auth Users Table
-CREATE TABLE IF NOT EXISTS auth_users (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    email VARCHAR(255) UNIQUE NOT NULL,
-    password VARCHAR(255) NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-
 -- Farm Profiles Table
 CREATE TABLE IF NOT EXISTS farm_profiles (
     id SERIAL PRIMARY KEY,
-    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL,
     state VARCHAR(100),
     district VARCHAR(100),
     default_land_size NUMERIC(10, 2) DEFAULT 1.00,
@@ -32,7 +14,7 @@ CREATE TABLE IF NOT EXISTS farm_profiles (
 -- Chat Sessions Table
 CREATE TABLE IF NOT EXISTS chat_sessions (
     id SERIAL PRIMARY KEY,
-    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL,
     title VARCHAR(255) DEFAULT 'New Chat',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
